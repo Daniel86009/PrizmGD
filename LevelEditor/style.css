@@ -1,0 +1,24 @@
+#grid {
+    display: grid;
+    gap: 1px;
+    margin: 20px 0;
+}
+textarea {
+    width: 100%;
+    height: 250px;
+}
+.tile {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #ccc;
+    background: white;
+    box-sizing: border-box;
+}
+.tile.filled {
+    background: black;
+}
+
+canvas {
+    border: solid black 1px;
+    background: #4a86e8;
+}
