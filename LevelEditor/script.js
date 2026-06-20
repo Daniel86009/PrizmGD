@@ -157,10 +157,10 @@ function start() {
         const tWidth = width * tileSize;
         if (!isNaN(Number(e.key))) mouse.selection = Number(e.key);
         if (e.key == 'ArrowUp') {
-            mouse.selection = (mouse.selection + 1) % 30;
+            mouse.selection = (mouse.selection + 1) % 40;
         } else if (e.key == 'ArrowDown') {
             mouse.selection -= 1;
-            if (mouse.selection < 0) mouse.selection = 29;
+            if (mouse.selection < 0) mouse.selection = 39;
         } else if (e.key == 'ArrowLeft') {
             levelX -= tileSize;
             if (levelX < 0) levelX = 0;
@@ -196,6 +196,26 @@ function update() {
     ctx.globalAlpha = 1;
 
     window.requestAnimationFrame(update);
+}
+
+function swap() {
+    let temp = [];
+    let swap = [
+        0, 1, 2, 3, 4, 5, 6, 7, 13, 14, 15,
+        16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+        26, 28, 27, 12, 35, 36, 37, 38, 39
+    ];
+
+    for (let i = 0; i < level.length; i++) {
+        let n = level[i];
+
+        n = swap[n];
+
+        temp.push(n);
+    }
+
+    level = temp;
+    exportLevel();
 }
 
 start();

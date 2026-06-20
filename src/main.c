@@ -86,33 +86,6 @@ void fillArea(unsigned x,unsigned y,unsigned w,unsigned h,unsigned short col){
     }
 }
 
-void drawRotatedSquare(int centerX, int centerY, int size, float angleDegrees, color_t color) {
-  color_t* VRAM = (color_t*)GetVRAMAddress();
-  
-  float cosA = cosEst[(int)angleDegrees / 10];
-  float sinA = sinEst[(int)angleDegrees / 10];
-  
-  int halfSize = size / 2;
-  
-  int boundingRadius = (int)(halfSize * 1.415f) + 1;
-
-  for (int dy = -boundingRadius; dy <= boundingRadius; dy++) {
-    for (int dx = -boundingRadius; dx <= boundingRadius; dx++) {
-      float rotX = dx * cosA + dy * sinA;
-      float rotY = -dx * sinA + dy * cosA;
-      
-      if (rotX >= -halfSize && rotX <= halfSize && rotY >= -halfSize && rotY <= halfSize) {
-        int screenX = centerX + dx;
-        int screenY = centerY + dy;
-        
-        if (screenX >= 0 && screenX < LCD_WIDTH_PX && screenY >= 0 && screenY < LCD_HEIGHT_PX) {
-          VRAM[screenY * LCD_WIDTH_PX + screenX] = color;
-        }
-      }
-    }
-  }
-}
-
 void drawRotatedSprite(const unsigned char* data, int centerX, int centerY, int size, float angle, color_t* palette) {
   color_t* VRAM = (color_t*)GetVRAMAddress();
 
@@ -202,6 +175,48 @@ void CopySpriteNbitMasked(const unsigned char* data, int x, int y, int width, in
       }
       VRAM += (LCD_WIDTH_PX-width);
    }
+}
+
+void CopyTilesheetSprite(const unsigned char* data, int sx, int sy, int sWidth, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
+  if (x + width <= 0 || x >= LCD_WIDTH_PX || y + height <= 0 || y >= LCD_HEIGHT_PX) return;
+  if (x < 0) sx -= x; width += x; x = 0;
+  if (y < 0) sy -= y; height += y; y = 0;
+  if (x + width > LCD_WIDTH_PX) width = LCD_WIDTH_PX - x;
+  if (y + height > LCD_HEIGHT_PX) height = LCD_HEIGHT_PX - y;
+
+  if (width <= 0 || height <= 0) return;
+
+  color_t* VRAM = (color_t*)GetVRAMAddress();
+
+  for (int j = 0; j < height; j++) {
+    if (y + j < 0 || y + j >= LCD_HEIGHT_PX) {
+      continue;
+    }
+
+    int offset = ((sy+j) * sWidth + sx) * bitwidth;
+
+    int byteIndex = offset / 8;
+    int availbits = 8 - (offset % 8);
+    unsigned char buf = data[byteIndex++];
+
+    if (availbits < 8) {
+      buf <<= (8 - availbits); 
+    }
+
+    for (int i = 0; i < width; i++) {
+      if (availbits < bitwidth) {
+        buf = data[byteIndex++];
+        availbits = 8;
+      }
+      color_t colorIndex = ((color_t)buf >> (8 - bitwidth));
+      buf <<= bitwidth;
+      availbits -= bitwidth;
+
+      if (x + i >= 0 && x + i < LCD_WIDTH_PX) {
+        VRAM[(y + j) * LCD_WIDTH_PX + x + i] = palette[colorIndex];
+      }
+    }
+  }
 }
 
 void reset() {
@@ -304,8 +319,12 @@ void drawMap(int xOffset, int yOffset) {
         int nx = (x * tileSize) - xOffset;
         int ny = (y * tileSize) - yOffset;
         int type = levels[levelId].layout[index] - 1;
-        CopySpriteNbit(tiles[type].data, nx, ny, tileSize, tileSize, (color_t*)tiles[type].palette, 8);
+        int sx = (type % 10) * tileSize;
+        int sy = (type / 10) * tileSize;
 
+        CopyTilesheetSprite(tilesheet2, sx, sy, 240, nx, ny, tileSize, tileSize, (color_t*)tilesheet2_palette);
+
+        //Draw hitboxes
         if (drawHitboxes) {
           int hitX = nx + collisions[type].x;
           int hitY = ny + collisions[type].y;
@@ -476,7 +495,7 @@ void loop() {
     if (isGrounded == false && pIsGrounded == false) {
       playerRot += 18.0f;
     } else {
-      playerRot = (float)(((int)(playerRot + 55.0f) / 90) * 90);
+      playerRot = (float)(((int)(playerRot + 54.0f) / 90) * 90);
     }
     if (playerRot >= 360.0f) playerRot = 0.0f;
 
