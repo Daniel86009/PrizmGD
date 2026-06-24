@@ -19,6 +19,25 @@ const tileSheet = new Image();
 tileSheet.src = 'Sprites/spritesheet x24.png';
 tileSheet.onload = function() {loaded = true};
 
+const playerSprite = new Image();
+playerSprite.src = 'Sprites/GDIcon x24.png';
+
+const gravity = 2.97;//1.98 * 1.5;
+let scrollSpeed = 5.8 * 1.5;
+let ground = tileSize * (height - 1);
+
+
+let oldPlayerPos = [];
+let playerX = 140;
+let playerY = tileSize * (height - 1);
+let isGrounded = false;
+
+let isTesting = false;
+let rGrav = false;
+
+let dead = false;
+let canJumpOrb = false;
+
 function drawTile(tileID, x, y) {
     const newTileID = tileID - 1;
     const tilesPerRow = 10;
@@ -51,14 +70,13 @@ function drawGrid(xOffset) {
 
 function drawLevel(xOffset) {
     let startCol = xOffset / tileSize;
-    //let endCol = Math.min(width, Math.ceil((xOffset + c.width) / tileSize));
-    let endCol = Math.ceil(startCol + c.width / tileSize);
-
-    if (endCol > width) endCol = width;
+    let endCol = Math.min(width, Math.ceil((xOffset + c.width) / tileSize));
+    console.log(endCol);
 
     for (let x = startCol; x < endCol; x++) {
         for (let y = 0; y < height; y++) {
             let index = y * width + x;
+            //console.log(index);
 
             if (level[index] != 0) {
                 let nx = (x * tileSize) - xOffset;
@@ -138,6 +156,11 @@ function changeSize() {
     c.height = height * tileSize;
 }
 
+function testLevel() {
+    playerY = tileSize * (height - 1);
+    isTesting = true;
+}
+
 function start() {
     c.addEventListener('mousedown', () => {
         mouse.down = true;
@@ -183,17 +206,25 @@ function update() {
     let gridX = Math.floor(mouse.x / tileSize);
     let gridY = Math.floor(mouse.y / tileSize);
 
-    if (mouse.down) {
-        let index = (gridY * width + Math.round(gridX + levelX / tileSize));
-        if (index < level.length) level[index] = mouse.selection;
+    if (!isTesting) {
+        if (mouse.down) {
+            let index = (gridY * width + Math.round(gridX + levelX / tileSize));
+            if (index < level.length) level[index] = mouse.selection;
+        }
     }
-
+    
     if (loaded) drawLevel(levelX);
     drawGrid(levelX);
 
-    ctx.globalAlpha = 0.5;
-    drawTile(mouse.selection, gridX * tileSize, gridY * tileSize);
-    ctx.globalAlpha = 1;
+    if (isTesting) {
+        
+
+        ctx.drawImage(playerSprite, playerX, playerY, tileSize, tileSize);
+    } else {
+        ctx.globalAlpha = 0.5;
+        drawTile(mouse.selection, gridX * tileSize, gridY * tileSize);
+        ctx.globalAlpha = 1;
+    }
 
     window.requestAnimationFrame(update);
 }

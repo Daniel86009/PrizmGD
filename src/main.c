@@ -57,11 +57,14 @@ const int playerSize = 24;
 bool isGrounded = false;
 bool pIsGrounded = false;
 bool canJumpOrb = false;
+bool canBlueJumpOrb = false;
 
 int curOrbI = -1;
 int lastOrbI = -1;
 
 bool dead = false;
+
+bool rGrav = false;
 
 //24 x 13
 
@@ -119,7 +122,7 @@ void drawRotatedSprite(const unsigned char* data, int centerX, int centerY, int 
   }
 }
 
-void CopySpriteNbit(const unsigned char* data, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
+/*void CopySpriteNbit(const unsigned char* data, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
   if (x + width <= 0 || x >= LCD_WIDTH_PX || y + height <= 0 || y >= LCD_HEIGHT_PX) return;
 
   color_t* VRAM = (color_t*)GetVRAMAddress();
@@ -150,7 +153,7 @@ void CopySpriteNbit(const unsigned char* data, int x, int y, int width, int heig
       }
     }
   }
-}
+}*/
 
 void CopySpriteNbitMasked(const unsigned char* data, int x, int y, int width, int height, const color_t* palette, color_t maskColor, unsigned int bitwidth) {
    color_t* VRAM = (color_t*) GetVRAMAddress();
@@ -177,45 +180,27 @@ void CopySpriteNbitMasked(const unsigned char* data, int x, int y, int width, in
    }
 }
 
-void CopyTilesheetSprite(const unsigned char* data, int sx, int sy, int sWidth, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
+void CopyTilesheetSprite(const unsigned char* data, int sx, int sy, int sWidth, int x, int y, int width, int height, color_t* palette) {
   if (x + width <= 0 || x >= LCD_WIDTH_PX || y + height <= 0 || y >= LCD_HEIGHT_PX) return;
-  if (x < 0) sx -= x; width += x; x = 0;
-  if (y < 0) sy -= y; height += y; y = 0;
+  if (x < 0) {sx -= x; width += x; x = 0;}
+  if (y < 0) {sy -= y; height += y; y = 0;}
   if (x + width > LCD_WIDTH_PX) width = LCD_WIDTH_PX - x;
   if (y + height > LCD_HEIGHT_PX) height = LCD_HEIGHT_PX - y;
 
   if (width <= 0 || height <= 0) return;
 
   color_t* VRAM = (color_t*)GetVRAMAddress();
+  color_t* dRowPtr = VRAM + (y * LCD_WIDTH_PX) + x;
+
+  const unsigned char* sRowPtr = data + (sy * sWidth) + sx;
 
   for (int j = 0; j < height; j++) {
-    if (y + j < 0 || y + j >= LCD_HEIGHT_PX) {
-      continue;
-    }
-
-    int offset = ((sy+j) * sWidth + sx) * bitwidth;
-
-    int byteIndex = offset / 8;
-    int availbits = 8 - (offset % 8);
-    unsigned char buf = data[byteIndex++];
-
-    if (availbits < 8) {
-      buf <<= (8 - availbits); 
-    }
-
     for (int i = 0; i < width; i++) {
-      if (availbits < bitwidth) {
-        buf = data[byteIndex++];
-        availbits = 8;
-      }
-      color_t colorIndex = ((color_t)buf >> (8 - bitwidth));
-      buf <<= bitwidth;
-      availbits -= bitwidth;
-
-      if (x + i >= 0 && x + i < LCD_WIDTH_PX) {
-        VRAM[(y + j) * LCD_WIDTH_PX + x + i] = palette[colorIndex];
-      }
+      *dRowPtr++ = palette[*sRowPtr++];
     }
+
+    dRowPtr += LCD_WIDTH_PX - width;
+    sRowPtr += sWidth - width;
   }
 }
 
@@ -226,6 +211,7 @@ void reset() {
   yVelocity = 0.0f;
   playerRot = 0.0f;
   isGrounded = false;
+  rGrav = false;
   curOrbI = -1;
   lastOrbI = -1;
   dead = false;
@@ -349,13 +335,11 @@ bool AABB(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
 }
 
 void collide() {
-  isGrounded = false;
-
   int pWX = (int)playerX + (int)levelX;
   int pWY = (int)playerY + (int)levelY;
 
   int oldPWX = pWX - scrollSpeed;
-  int oldPWY = (int)(pWY - yVelocity);
+  int oldPWY = rGrav ? (int)(pWY + yVelocity) : (int)(pWY - yVelocity);
 
   int startCol = (int)levelX / tileSize;
   if (startCol < 0) startCol = 0;
@@ -379,49 +363,83 @@ void collide() {
       int tileWY = y * tileSize + shape.y;
 
       if (AABB(pWX, pWY, playerSize, playerSize, tileWX, tileWY, shape.width, shape.height)) {
+        switch (shape.collisionType) {
+          case 1:
+            dead = true;
+            return;
+          case 2: case 5:
+            curOrbI = mapIndex;
+            if (lastOrbI != curOrbI) {
+              if (shape.collisionType == 2) canJumpOrb = true;
+              else canBlueJumpOrb = true;
+            } 
+            continue;
+          case 3:
+            curOrbI = mapIndex;
+            if (lastOrbI != curOrbI) {
+              playerY = (float)(tileWY - playerSize) - levelY;
 
-        if (shape.collisionType == 2) {
-          curOrbI = mapIndex;
-          if (lastOrbI != curOrbI) canJumpOrb = true;
-          continue;
-        }
-        
-        if (shape.collisionType == 3) {
-          curOrbI = mapIndex;
-          if (lastOrbI != curOrbI) {
-            playerY = (float)(tileWY - playerSize) - levelY;
+              pWY = (int)playerY - playerSize;
 
-            pWY = (int)playerY - playerSize;
-
-            yVelocity = jumpVel * 1.36;
-            lastOrbI = curOrbI;
-            jumpPad = true;
-          }
-          continue;
-        }
-
-        if (shape.collisionType == 1) {
-          dead = true;
-          return;
+              yVelocity = jumpVel * 1.36;
+              
+              lastOrbI = curOrbI;
+              jumpPad = true;
+            }
+            continue;
+          case 6:
+            curOrbI = mapIndex;
+            if (lastOrbI != curOrbI) {
+              rGrav = !rGrav;
+              yVelocity = -jumpVel * 1.36;
+              
+              if (rGrav) {
+                playerY = (float)(tileWY + shape.height) - levelY;
+              } else {
+                playerY = (float)(tileWY - playerSize) - levelY;
+              }
+              
+              pWY = (int)playerY + (int)levelY;
+              lastOrbI = curOrbI;
+              jumpPad = true;
+            }
+            continue;
         }
 
         if (shape.collisionType == 0) {
-          if (yVelocity >= 0.0f && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
-            playerY = (float)(tileWY - playerSize) - levelY;
-            yVelocity = 0.0f;
-            isGrounded = true;
-            pWY = tileWY - playerSize;
-          } else if (yVelocity <= 0.0f && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
-            playerY = (float)(tileWY + shape.height) - levelY;
-            yVelocity = 0.2f;
-            pWY = tileWY + shape.height;
+          if (rGrav) {
+            //Reversed gravity
+            if (yVelocity >= 0.0f && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
+              playerY = (float)(tileWY + playerSize) - levelY;
+              yVelocity = 0.0f;
+              isGrounded = true;
+              pWY = tileWY + shape.height;
+            } else if (yVelocity < 0.0f && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
+              playerY = (float)(tileWY - playerSize) - levelY;
+              yVelocity = 0.2f;
+              pWY = tileWY - playerSize;
+            } else {
+              if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
+                dead = true;
+                return;
+              }
+            }
           } else {
-            if (oldPWX + playerSize <= tileWX) {
-              dead = true;
-              return;
-            } else if (oldPWX >= tileWX + shape.width) {
-              dead = true;
-              return;
+            //Normal gravity
+            if (yVelocity >= 0.0f && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
+              playerY = (float)(tileWY - playerSize) - levelY;
+              yVelocity = 0.0f;
+              isGrounded = true;
+              pWY = tileWY - playerSize;
+            } else if (yVelocity <= 0.0f && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
+              playerY = (float)(tileWY + shape.height) - levelY;
+              yVelocity = 0.2f;
+              pWY = tileWY + shape.height;
+            } else {
+              if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
+                dead = true;
+                return;
+              }
             }
           }
         }
@@ -467,16 +485,22 @@ void loop() {
       if (canJumpOrb) {
         yVelocity = jumpVel * 1.1;
         lastOrbI = curOrbI;
+      } else if (canBlueJumpOrb) {
+        rGrav = !rGrav;
+        yVelocity = -jumpVel * 1.1;
+        lastOrbI = curOrbI;
       } else if (isGrounded) {
         yVelocity = jumpVel;
       }
     }
 
     yVelocity += gravity;
-    playerY += yVelocity;
+    if (rGrav) playerY -= yVelocity;
+    else playerY += yVelocity;
 
     isGrounded = false;
     canJumpOrb = false;
+    canBlueJumpOrb = false;
     collide();
 
     float oLevelY = levelY;
