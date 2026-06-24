@@ -7,7 +7,8 @@
 #include <math.h>
 
 #include "sprites.h"
-#include "levels.h"
+//#include "levels.h"
+#include "load.h"
 #include "collisions.h"
 
 const float sinEst[36] = {
@@ -228,20 +229,30 @@ void mainMenu() {
   } else if (keyDown(KEY_PRGM_LEFT) && lastKey != KEY_PRGM_LEFT) {
     levelId = (levelId - 1 + levelCount) % levelCount;
     lastKey = KEY_PRGM_LEFT;
-    maxLevelY = levels[levelId].h * tileSize - ground;
+    maxLevelY = levels[levelId].header.h * tileSize - ground;
+    loadLevelLayout(levelId);
   } else if (keyDown(KEY_PRGM_RIGHT) && lastKey != KEY_PRGM_RIGHT) {
     levelId = (levelId + 1) % levelCount;
     lastKey = KEY_PRGM_RIGHT;
-    maxLevelY = levels[levelId].h * tileSize - ground;
+    maxLevelY = levels[levelId].header.h * tileSize - ground;
+    loadLevelLayout(levelId);
   }
 
   Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
 
+  if (levelCount == 0) {
+    int x = 60, y = 99;
+    PrintMini(&x, &y, "No levels found in", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
+    x = 60; y = 115;
+    PrintMini(&x, &y, "\\\\fls0\\GDLEVELS\\", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
+    return;
+  }
+
   int x = 0, y = 99;
-  PrintMini(&x, &y, levels[levelId].name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0);
+  PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0);
   x = 192 - x / 2;
-  PrintMini(&x, &y, levels[levelId].name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
-  CopySpriteNbitMasked(difficulties[levels[levelId].diff].data, 177, 80, 30, 30, difficulties[levels[levelId].diff].palette, (color_t)0x2589, 8);
+  PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
+  CopySpriteNbitMasked(difficulties[levels[levelId].header.diff].data, 177, 80, 30, 30, difficulties[levels[levelId].header.diff].palette, (color_t)0x2589, 8);
 }
 
 void pauseMenu() {
@@ -295,16 +306,16 @@ void drawMap(int xOffset, int yOffset) {
   int startCol = xOffset / tileSize;
   int endCol = startCol + 17;
 
-  if (endCol > levels[levelId].w) endCol = levels[levelId].w;
+  if (endCol > levels[levelId].header.w) endCol = levels[levelId].header.w;
 
   for (int x = startCol; x < endCol; x++) {
-    for (int y = 0; y < levels[levelId].h; y++) {
-      int index = y * levels[levelId].w + x;
+    for (int y = 0; y < levels[levelId].header.h; y++) {
+      int index = y * levels[levelId].header.w + x;
 
-      if (levels[levelId].layout[index]) {
+      if (curLayout[index]) {
         int nx = (x * tileSize) - xOffset;
         int ny = (y * tileSize) - yOffset;
-        int type = levels[levelId].layout[index] - 1;
+        int type = curLayout[index] - 1;
         int sx = (type % 10) * tileSize;
         int sy = (type / 10) * tileSize;
 
@@ -345,14 +356,14 @@ void collide() {
   if (startCol < 0) startCol = 0;
   
   int endCol = startCol + 17; 
-  if (endCol > levels[levelId].w) endCol = levels[levelId].w;
+  if (endCol > levels[levelId].header.w) endCol = levels[levelId].header.w;
 
   bool jumpPad = false;
 
   for (int x = startCol; x < endCol; x++) {
-    for (int y = 0; y < levels[levelId].h; y++) {
-      int mapIndex = y * levels[levelId].w + x;
-      int tileID = levels[levelId].layout[mapIndex];
+    for (int y = 0; y < levels[levelId].header.h; y++) {
+      int mapIndex = y * levels[levelId].header.w + x;
+      int tileID = curLayout[mapIndex];
 
       if (tileID <= 0) continue;
 
@@ -393,7 +404,7 @@ void collide() {
               rGrav = !rGrav;
               yVelocity = 0;//-jumpVel * 1.36;
               
-              if (rGrav) {
+              if (!rGrav) {
                 playerY = (float)(tileWY + shape.height) - levelY;
               } else {
                 playerY = (float)(tileWY - playerSize) - levelY;
@@ -447,7 +458,7 @@ void collide() {
     }
   }
 
-  int worldGround = (levels[levelId].h * tileSize) - (int)levelY;
+  int worldGround = (levels[levelId].header.h * tileSize) - (int)levelY;
   if ((int)playerY + playerSize > worldGround) {
     playerY = (float)(worldGround - playerSize);
     if (jumpPad == false) yVelocity = 0.0f;
@@ -477,7 +488,8 @@ void loop() {
 
   if (!isPaused) {
     levelX += scrollSpeed;
-    if ((int)levelX >= (levels[levelId].w * tileSize) - LCD_WIDTH_PX) {
+
+    if ((int)levelX >= (levels[levelId].header.w * tileSize) - LCD_WIDTH_PX) {  // .w → .header.w
       reset();
     }
 
@@ -533,7 +545,7 @@ void loop() {
 
   if (!onMenu) {
     Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
-    int vGroundY = (levels[levelId].h * tileSize) - (int)levelY;
+    int vGroundY = (levels[levelId].header.h * tileSize) - (int)levelY;
     if (vGroundY < LCD_HEIGHT_PX) fillArea(0, vGroundY, LCD_WIDTH_PX, 1, (color_t)0x0000);
     drawMap((int)levelX, (int)levelY);
     drawRotatedSprite(icon, playerX + 12, playerY + 12, playerSize, playerRot, (color_t*)icon_palette);
@@ -561,7 +573,12 @@ int main() {
 
   Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
 
-  maxLevelY = levels[levelId].h * tileSize - ground;
+  loadLevelList();
+
+  if (levelCount > 0) {
+    loadLevelLayout(levelId);
+    maxLevelY = levels[levelId].header.h * tileSize - ground;  // .h → .header.h
+  }
 
   while (1) {
     loop();

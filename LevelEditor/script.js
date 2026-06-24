@@ -1,8 +1,14 @@
 const c = document.getElementById('c');
 const ctx = c.getContext('2d');
 
+const widthIn = document.getElementById('width');
+const heightIn = document.getElementById('height');
+
 const output = document.getElementById('output');
-const selectionInput = document.getElementById('selectionInput');
+const stopButton = document.getElementById('stopButton');
+
+const nameInput = document.getElementById('nameInput');
+const diffInput = document.getElementById('diffInput');
 
 let level = [];
 let mouse = {x: 0, y: 0, down: false, selection: 1};
@@ -71,8 +77,8 @@ function drawLevel(xOffset) {
 }
 
 function newLevel() {
-    width = parseInt(document.getElementById('width').value);
-    height = parseInt(document.getElementById('height').value);
+    width = parseInt(widthIn.value);
+    height = parseInt(heightIn.value);
 
     c.width = document.body.clientWidth - 10;
     c.height = height * tileSize;
@@ -99,6 +105,108 @@ function exportLevel() {
     output.value = out;
 }
 
+function downloadLevelBinary(name, diff, w, h, layout) {
+    const MAX_NAME_LEN = 32;
+    const headerSize = MAX_NAME_LEN + 12; 
+
+    const layoutSize = layout.length * 1; 
+    const totalSize = headerSize + layoutSize;
+
+    const buffer = new ArrayBuffer(totalSize);
+    const view = new DataView(buffer);
+
+    for (let i = 0; i < MAX_NAME_LEN; i++) {
+        if (i < name.length) {
+            view.setUint8(i, name.charCodeAt(i));
+        } else {
+            view.setUint8(i, 0);
+        }
+    }
+
+    const ule = false; //Use big endian
+    
+    view.setInt32(32, diff, ule);
+    view.setInt32(36, w, ule);
+    view.setInt32(40, h, ule);
+
+    for (let i = 0; i < layout.length; i++) {
+        const offset = headerSize + i;
+        view.setUint8(offset, layout[i]); 
+    }
+
+    const blob = new Blob([buffer], {type: 'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    
+    const safeFilename = name.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'level';
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${safeFilename.toUpperCase()}.LVL`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function importLevelBinary() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.lvl,.LVL';
+
+    fileInput.onchange = function (e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+
+        reader.onload = function (evt) {
+            const buffer = evt.target.result;
+            const view = new DataView(buffer);
+
+            const MAX_NAME_LEN = 32;
+            const headerSize = MAX_NAME_LEN + 12;
+
+            let nameBytes = [];
+            for (let i = 0; i < MAX_NAME_LEN; i++) {
+                const charCode = view.getUint8(i);
+                if (charCode === 0) break;
+                nameBytes.push(String.fromCharCode(charCode));
+            }
+            const name = nameBytes.join('').trim();
+
+            const ule = false;
+            const diff = view.getInt32(32, ule);
+            const w = view.getInt32(36, ule);
+            const h = view.getInt32(40, ule);
+
+            const totalTiles = w * h;
+            const layout = [];
+
+            for (let i = 0; i < totalTiles; i++) {
+                const offset = headerSize + i;
+                if (offset < view.byteLength) {
+                    layout.push(view.getUint8(offset));
+                } else {
+                    layout.push(0);
+                }
+            }
+
+            width = w;
+            height = h;
+            level = layout;
+            nameInput.value = name;
+            diffInput.value = diff;
+            widthIn.value = w;
+            heightIn.value = h;
+        };
+
+        reader.readAsArrayBuffer(file);
+    };
+
+    fileInput.click();
+}
+
 function loadLevel() {
     const data = output.value;
 
@@ -108,14 +216,14 @@ function loadLevel() {
     const inputHeight = parseInt(document.getElementById('height').value);
     height = inputHeight;
     width = size / height;
-    document.getElementById('width').value = width;
+    widthIn.value = width;
 
     level = array;
 }
 
 function changeSize() {
-    const nWidth = parseInt(document.getElementById('width').value);
-    const nHeight = parseInt(document.getElementById('height').value);
+    const nWidth = parseInt(widthIn.value);
+    const nHeight = parseInt(heightIn.value);
 
     let nLevel = [];
     
@@ -151,6 +259,12 @@ function testLevel() {
     dead = false;
     isTesting = true;
     oldPlayerPos = [];
+    stopButton.style.visibility = 'visible';
+}
+
+function stopTesting() {
+    isTesting = false;
+    stopButton.style.visibility = 'hidden';
 }
 
 function start() {
@@ -188,10 +302,6 @@ function start() {
             }
             if (lastKey == keyName) lastKey = null;
         }
-    });
-
-    selectionInput.addEventListener('change', () => {
-        mouse.selection = selectionInput.value;
     });
 
     newLevel();
