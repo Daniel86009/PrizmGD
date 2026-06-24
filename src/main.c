@@ -391,7 +391,7 @@ void collide() {
             curOrbI = mapIndex;
             if (lastOrbI != curOrbI) {
               rGrav = !rGrav;
-              yVelocity = -jumpVel * 1.36;
+              yVelocity = 0;//-jumpVel * 1.36;
               
               if (rGrav) {
                 playerY = (float)(tileWY + shape.height) - levelY;
@@ -483,11 +483,11 @@ void loop() {
 
     if (keyDown(KEY_PRGM_UP) || keyDown(KEY_PRGM_SHIFT)) {
       if (canJumpOrb) {
-        yVelocity = jumpVel * 1.1;
+        yVelocity = jumpVel;
         lastOrbI = curOrbI;
       } else if (canBlueJumpOrb) {
         rGrav = !rGrav;
-        yVelocity = -jumpVel * 1.1;
+        yVelocity = -jumpVel * 0.5;
         lastOrbI = curOrbI;
       } else if (isGrounded) {
         yVelocity = jumpVel;
