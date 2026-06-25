@@ -7,7 +7,6 @@
 #include <math.h>
 
 #include "sprites.h"
-//#include "levels.h"
 #include "load.h"
 #include "collisions.h"
 
@@ -69,6 +68,29 @@ bool rGrav = false;
 
 //24 x 13
 
+/*static void itoa_buf(char *buf, int n) {
+  if (n == 0) { buf[0]='0'; buf[1]='\0'; return; }
+  char tmp[12]; int i=0;
+  if (n < 0) { buf[0]='-'; itoa_buf(buf+1, -n); return; }
+  while (n > 0) { tmp[i++] = '0' + (n % 10); n /= 10; }
+  int j = 0; while (i > 0) buf[j++] = tmp[--i]; buf[j] = '\0';
+}
+
+static void debugShow(const char *label, int value, int ypos) {
+  char vbuf[16];
+  char full[48];
+  itoa_buf(vbuf, value);
+
+  int i = 0, j = 0;
+  while (label[i]) full[j++] = label[i++];
+  i = 0;
+  while (vbuf[i]) full[j++] = vbuf[i++];
+  full[j] = '\0';
+
+  int x = 10;
+  PrintMini(&x, &ypos, full, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
+}*/
+
 int keyDown(int basic_keycode) {
 	const unsigned short* keyboard_register = (unsigned short*)0xA44B0000;
 	int row, col, word, bit;
@@ -122,39 +144,6 @@ void drawRotatedSprite(const unsigned char* data, int centerX, int centerY, int 
     }
   }
 }
-
-/*void CopySpriteNbit(const unsigned char* data, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
-  if (x + width <= 0 || x >= LCD_WIDTH_PX || y + height <= 0 || y >= LCD_HEIGHT_PX) return;
-
-  color_t* VRAM = (color_t*)GetVRAMAddress();
-  int offset = 0;
-  unsigned char buf = 0;
-  int availbits = 0;
-
-  for (int j = 0; j < height; j++) {
-    availbits = 0;
-    buf = 0;
-
-    if (y + j < 0 || y + j >= LCD_HEIGHT_PX) {
-      offset += (width * bitwidth) / 8;
-      continue;
-    }
-
-    for (int i = 0; i < width; i++) {
-      if (!availbits) {
-        buf = data[offset++];
-        availbits = 8;
-      }
-      color_t colorIndex = ((color_t)buf >> (8 - bitwidth));
-      buf <<= bitwidth;
-      availbits -= bitwidth;
-
-      if (x + i >= 0 && x + i < LCD_WIDTH_PX) {
-        VRAM[(y + j) * LCD_WIDTH_PX + x + i] = palette[colorIndex];
-      }
-    }
-  }
-}*/
 
 void CopySpriteNbitMasked(const unsigned char* data, int x, int y, int width, int height, const color_t* palette, color_t maskColor, unsigned int bitwidth) {
    color_t* VRAM = (color_t*) GetVRAMAddress();
@@ -402,12 +391,14 @@ void collide() {
             curOrbI = mapIndex;
             if (lastOrbI != curOrbI) {
               rGrav = !rGrav;
-              yVelocity = 0;//-jumpVel * 1.36;
+              //yVelocity = 0;//-jumpVel * 1.36;
               
               if (!rGrav) {
                 playerY = (float)(tileWY + shape.height) - levelY;
+                yVelocity = -jumpVel * 0.5;
               } else {
                 playerY = (float)(tileWY - playerSize) - levelY;
+                yVelocity = -jumpVel * 0.5;
               }
               
               pWY = (int)playerY + (int)levelY;
@@ -415,7 +406,20 @@ void collide() {
               jumpPad = true;
             }
             continue;
-        }
+          case 7:
+            if (rGrav != false) {
+              rGrav = false;
+              yVelocity = -yVelocity;
+            }
+
+            continue;
+          case 8:
+            if (rGrav != true) {
+              rGrav = true;
+              yVelocity = -yVelocity;
+            }
+            continue;
+          }
 
         if (shape.collisionType == 0) {
           if (rGrav) {
@@ -489,7 +493,7 @@ void loop() {
   if (!isPaused) {
     levelX += scrollSpeed;
 
-    if ((int)levelX >= (levels[levelId].header.w * tileSize) - LCD_WIDTH_PX) {  // .w → .header.w
+    if ((int)levelX >= (levels[levelId].header.w * tileSize) - LCD_WIDTH_PX) {
       reset();
     }
 
@@ -535,6 +539,10 @@ void loop() {
     }
     if (playerRot >= 360.0f) playerRot = 0.0f;
 
+    //Out of bounds check
+    if (levelY < -230.0f) dead = true;
+
+
     if (dead) {
       reset();
       return;
@@ -577,7 +585,7 @@ int main() {
 
   if (levelCount > 0) {
     loadLevelLayout(levelId);
-    maxLevelY = levels[levelId].header.h * tileSize - ground;  // .h → .header.h
+    maxLevelY = levels[levelId].header.h * tileSize - ground;
   }
 
   while (1) {

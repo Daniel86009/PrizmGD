@@ -7,28 +7,51 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <label>
-    Width:
-    <input id="width" type="number" value="120">
-    </label>
+    <div class="optionsBar">
+        <div class="dropdown">
+            <p>File</p>
+            <div class="dropdownContent">
+                <div onclick="openLevel()">Open</div>
+                <div onclick="saveLevel()">Save</div>
+                <div onclick="saveLevelAs()">Save As</div>
+            </div>
+        </div>
+        
+        <div class="dropdown">
+            <p>Edit</p>
+            <div class="dropdownContent">
+                <div onclick="newLevel()">Clear Level</div>    
+                <div onclick="changeSize()">Set Size</div>
+            </div>
+        </div>
+        
+        
+        <div onclick="playButton()"><img src="Sprites/Play.svg" width="20px" height="20px" id="pausePlayImg"></div>
 
-    <label>
-    Height:
-    <input id="height" type="number" value="10">
-    </label>
+        <div class="editableText" onclick="startEditing()">
+            <span id="levelNameText">Untitled Level</span>
 
-    <button onclick="newLevel()">Create Level</button>
-    <button onclick="exportLevel()">Export</button>
-    <button onclick="downloadLevelBinary(nameInput.value, diffInput.value, width, height, level)">Download Binary</button>
-    <button onclick="loadLevel()">Load Level</button>
-    <button onclick="changeSize()">Set Size</button>
-    <button onclick="testLevel()">Test</button>
-    <button onclick="stopTesting()" style="visibility: hidden;" id="stopButton">Stop</button>
+            <img src="Sprites/PencilWhite.svg" alt="Edit" class="editIcon">
 
+            <input id="levelNameInput" type="text" value="Untitled Level" onblur="stopEditing()" onkeydown="if(event.key==='Enter') stopEditing()">
+        </div>
+
+        <div class="dropdown">
+            <img src="Sprites/diffIcon01.png">
+            <div class="dropdownContent" class="diffDropdownContent">
+                <img src="Sprites/diffIcon01.png" class="diffImg">
+                <img src="Sprites/diffIcon02.png" class="diffImg">
+                <img src="Sprites/diffIcon03.png" class="diffImg">
+                <img src="Sprites/diffIcon04.png" class="diffImg">
+                <img src="Sprites/diffIcon05.png" class="diffImg">
+            </div>
+        </div>
+
+        <div class="levelInfo"><span id="dimensions">Width: 1, Height: 1</span>  <span id="size">Size: 1</span></div>
+    </div>
+    
     <canvas id="c"></canvas>
-    <label>Name: <input id="nameInput" type="text"></label>
     <label>Difficulty: <input id="diffInput" type="number" value="0"></label>
-    <textarea id="output"></textarea>
 
     <script src="script.js"></script>
     <script src="collisions.js"></script>

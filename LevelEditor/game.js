@@ -1,19 +1,17 @@
 const playerSprite = new Image();
 playerSprite.src = 'Sprites/GDIcon x24.png';
 
-const gravity = 1.98 * 1.5 * 2;
-let scrollSpeed = 5.8 * 1.5 * 2;
-let ground = tileSize * (height - 1);
+const gravity = 1.98 * 1.5;
+let scrollSpeed = 5.8 * 1.5;
+let ground = tileSize * 19;
 
-
-let oldPlayerPos = [];
 let playerX = 140;
-let playerY = tileSize * (height - 1);
+let playerY = tileSize * 19;
 
 let yVelocity = 0;
-const jumpVel = -12.8 * 1.5 * 2;
+const jumpVel = -12.8 * 1.5;
 
-const playerSize = 48;
+const playerSize = 24;
 
 let rGrav = false;
 
@@ -64,10 +62,10 @@ function collide() {
             let shape = collisions[tileID - 1];
             if (shape.collisionType == 4) continue;
 
-            let tileWX = x * tileSize + shape.x * 2;
-            let tileWY = y * tileSize + shape.y * 2;
+            let tileWX = x * tileSize + shape.x;
+            let tileWY = y * tileSize + shape.y + (20 - height) * tileSize;
 
-            if (AABB(pWX, pWY, playerSize, playerSize, tileWX, tileWY, shape.width * 2, shape.height * 2)) {
+            if (AABB(pWX, pWY, playerSize, playerSize, tileWX, tileWY, shape.width, shape.height)) {
                 switch (shape.collisionType) {
                     case 1:
                         dead = true;
@@ -96,12 +94,14 @@ function collide() {
                         curOrbI = mapIndex;
                         if (lastOrbI != curOrbI) {
                             rGrav = !rGrav;
-                            yVelocity = 0;//-jumpVel * 1.36;
+                            //yVelocity = 0;//-jumpVel * 1.36;
               
                             if (!rGrav) {
                                 playerY = tileWY + shape.height;
+                                yVelocity = -jumpVel * 0.5;
                             } else {
                                 playerY = tileWY - playerSize;
+                                yVelocity = -jumpVel * 0.5;
                             }
 
                             pWY = Math.floor(playerY);
@@ -109,22 +109,35 @@ function collide() {
                             jumpPad = true;
                         }
                         continue;
+                    case 7:
+                        if (rGrav != false) {
+                            rGrav = false;
+                            yVelocity = -yVelocity;
+                        }
+
+                        continue;
+                    case 8:
+                        if (rGrav != true) {
+                            rGrav = true;
+                            yVelocity = -yVelocity;
+                        }
+                        continue;
                 }
 
                 if (shape.collisionType == 0) {
                     if (rGrav) {
                         //Reversed gravity
-                        if (yVelocity >= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height * 2)) {
+                        if (yVelocity >= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
                             playerY = tileWY + playerSize;
                             yVelocity = 0.0;
                             isGrounded = true;
-                            pWY = tileWY + shape.height * 2;
+                            pWY = tileWY + shape.height;
                         } else if (yVelocity < 0 && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
                             playerY = tileWY - playerSize;
                             yVelocity = 0.2;
                             pWY = tileWY - playerSize;
                         } else {
-                            if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width * 2) {
+                            if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
                                 dead = true;
                                 return;
                             }
@@ -136,12 +149,12 @@ function collide() {
                             yVelocity = 0;
                             isGrounded = true;
                             pWY = tileWY - playerSize;
-                        } else if (yVelocity <= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height * 2)) {
-                            playerY = tileWY + shape.height * 2;
+                        } else if (yVelocity <= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
+                            playerY = tileWY + shape.height;
                             yVelocity = 0.2;
-                            pWY = tileWY + shape.height * 2;
+                            pWY = tileWY + shape.height;
                         } else {
-                            if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width * 2) {
+                            if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
                                 dead = true;
                                 return;
                             }
@@ -152,7 +165,7 @@ function collide() {
         }
     }
 
-    let worldGround = (height * tileSize);
+    let worldGround = (20 * tileSize);
     if (Math.floor(playerY) + playerSize > worldGround) {
         playerY = worldGround - playerSize;
         if (jumpPad == false) yVelocity = 0;
@@ -195,12 +208,12 @@ function updatePlayer() {
     canBlueJumpOrb = false;
     collide();
 
-    oldPlayerPos.push({x: levelX + playerX, y: playerY + 24});
+    oldPlayerPos.push({x: levelX + playerX, y: playerY + (playerSize / 2)});
     
     if (playerY < -100) dead = true;
 
     if (dead) {
-        isTesting = false;
+        stopTesting();
         return;
     }
 }

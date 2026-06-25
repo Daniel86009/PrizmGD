@@ -1,25 +1,22 @@
 const c = document.getElementById('c');
 const ctx = c.getContext('2d');
 
-const widthIn = document.getElementById('width');
-const heightIn = document.getElementById('height');
-
 const output = document.getElementById('output');
 const stopButton = document.getElementById('stopButton');
 
-const nameInput = document.getElementById('nameInput');
 const diffInput = document.getElementById('diffInput');
+const levelNameText = document.getElementById("levelNameText");
 
 let level = [];
-let mouse = {x: 0, y: 0, down: false, selection: 1};
+let mouse = {x: 0, y: 0, down: false, tileId: 1};
 let pressedKeys = [];
 let width = 120;
-let height = 10;
+let height = 20;
 
 let levelX = 0;
 
 let sTileSize = 24
-let tileSize = sTileSize * 2;
+let tileSize = sTileSize;
 
 let isTesting = false;
 
@@ -30,8 +27,13 @@ const tileSheet = new Image();
 tileSheet.src = 'Sprites/spritesheet x24.png';
 tileSheet.onload = function() {loaded = true};
 
-function drawTile(tileID, x, y) {
-    const newTileID = tileID - 1;
+let currentFileHandle = null;
+let unsavedChanges = false;
+
+let oldPlayerPos = [];
+
+function drawTile(id, x, y) {
+    const newTileID = id - 1;
     const tilesPerRow = 10;
 
     const sx = (newTileID % tilesPerRow) * sTileSize;
@@ -63,178 +65,162 @@ function drawGrid(xOffset) {
 function drawLevel(xOffset) {
     let startCol = Math.floor(xOffset / tileSize);
     let endCol = Math.min(width, Math.ceil((xOffset + c.width) / tileSize));
+    let yOffset = (20 - height) * tileSize;
 
     for (let x = startCol; x < endCol; x++) {
         for (let y = 0; y < height; y++) {
             let index = y * width + x;
-
             if (level[index] != 0) {
                 let nx = (x * tileSize) - xOffset;
-                drawTile(level[index], nx, y * tileSize);
+                drawTile(level[index], nx, y * tileSize + yOffset);
             }
         }
     }
 }
 
 function newLevel() {
-    width = parseInt(widthIn.value);
-    height = parseInt(heightIn.value);
-
-    c.width = document.body.clientWidth - 10;
-    c.height = height * tileSize;
+    width = 1;
+    height = 1;
+    c.width = document.body.clientWidth;
 
     level = [];
     for (let i = 0; i < width*height; i++) {
         level.push(0);
     }
+
+    updateLevelInfo();
 }
 
-function exportLevel() {
-    let out = `const int level[${width * height}] = {\n`;
+async function openLevel() {
+    try {
+        const [fileHandle] = await window.showOpenFilePicker({
+            types: [{
+                description: 'Level Files',
+                accept: {
+                    'application/octet-stream': ['.lvl']
+                }
+            }]
+        });
 
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            out += level[y * width + x];
-            if (x + y * width < width * height - 1) out += ',';
-        }
-        out += '\n';
+        currentFileHandle = fileHandle;
+
+        const file = await fileHandle.getFile();
+        const buffer = await file.arrayBuffer();
+
+        loadLevelFromBuffer(buffer);
+    } catch (err) {
+
+    }
+}
+
+function loadLevelFromBuffer(buffer) {
+    const view = new DataView(buffer);
+
+    const MAX_NAME_LEN = 32;
+    const headerSize = MAX_NAME_LEN + 12;
+
+    let nameBytes = [];
+    for (let i = 0; i < MAX_NAME_LEN; i++) {
+        const charCode = view.getUint8(i);
+        if (charCode === 0) break;
+        nameBytes.push(String.fromCharCode(charCode));
     }
 
-    out += '};';
+    const name = nameBytes.join('').trim();
 
-    output.value = out;
+    const ule = false; // Use big endian
+
+    const diff = view.getInt32(32, ule);
+    const w = view.getInt32(36, ule);
+    const h = view.getInt32(40, ule);
+
+    const layout = [];
+
+    for (let i = 0; i < w * h; i++) {
+        layout.push(view.getUint8(headerSize + i));
+    }
+
+    width = w;
+    height = h;
+    level = layout;
+
+    levelNameText.textContent = name;
+
+    diffInput.value = diff;
+
+    changeSize();
+    updateLevelInfo();
 }
 
-function downloadLevelBinary(name, diff, w, h, layout) {
+async function saveLevel() {
+    if (!currentFileHandle) {
+        saveLevelAs();
+        return;
+    }
+
+    const buffer = createLevelBuffer(levelNameText.textContent, parseInt(diffInput.value), width, height, level);
+
+    const writable = await currentFileHandle.createWritable();
+
+    await writable.write(buffer);
+    await writable.close();
+    unsavedChanges = false;
+}
+
+async function saveLevelAs() {
+    const fileHandle = await window.showSaveFilePicker({
+        suggestedName: `${levelNameText.textContent}.lvl`,
+        types: [{
+            description: 'Level Files',
+            accept: {
+                'application/octet-stream': ['.lvl']
+            }
+        }]
+    });
+
+    currentFileHandle = fileHandle;
+
+    await saveLevel();
+}
+
+function createLevelBuffer(name, diff, w, h, layout) {
     const MAX_NAME_LEN = 32;
-    const headerSize = MAX_NAME_LEN + 12; 
+    const headerSize = MAX_NAME_LEN + 12;
 
-    const layoutSize = layout.length * 1; 
-    const totalSize = headerSize + layoutSize;
+    const buffer = new ArrayBuffer(
+        headerSize + layout.length
+    );
 
-    const buffer = new ArrayBuffer(totalSize);
     const view = new DataView(buffer);
 
     for (let i = 0; i < MAX_NAME_LEN; i++) {
-        if (i < name.length) {
-            view.setUint8(i, name.charCodeAt(i));
-        } else {
-            view.setUint8(i, 0);
-        }
+        view.setUint8(
+            i,
+            i < name.length ? name.charCodeAt(i) : 0
+        );
     }
 
-    const ule = false; //Use big endian
-    
+    const ule = false;
+
     view.setInt32(32, diff, ule);
     view.setInt32(36, w, ule);
     view.setInt32(40, h, ule);
 
     for (let i = 0; i < layout.length; i++) {
-        const offset = headerSize + i;
-        view.setUint8(offset, layout[i]); 
+        view.setUint8(headerSize + i, layout[i]);
     }
 
-    const blob = new Blob([buffer], {type: 'application/octet-stream'});
-    const url = URL.createObjectURL(blob);
-    
-    const safeFilename = name.trim().replace(/[^a-zA-Z0-9_-]/g, '_') || 'level';
-
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${safeFilename.toUpperCase()}.LVL`;
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    return buffer;
 }
 
-function importLevelBinary() {
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = '.lvl,.LVL';
-
-    fileInput.onchange = function (e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-
-        reader.onload = function (evt) {
-            const buffer = evt.target.result;
-            const view = new DataView(buffer);
-
-            const MAX_NAME_LEN = 32;
-            const headerSize = MAX_NAME_LEN + 12;
-
-            let nameBytes = [];
-            for (let i = 0; i < MAX_NAME_LEN; i++) {
-                const charCode = view.getUint8(i);
-                if (charCode === 0) break;
-                nameBytes.push(String.fromCharCode(charCode));
-            }
-            const name = nameBytes.join('').trim();
-
-            const ule = false;
-            const diff = view.getInt32(32, ule);
-            const w = view.getInt32(36, ule);
-            const h = view.getInt32(40, ule);
-
-            const totalTiles = w * h;
-            const layout = [];
-
-            for (let i = 0; i < totalTiles; i++) {
-                const offset = headerSize + i;
-                if (offset < view.byteLength) {
-                    layout.push(view.getUint8(offset));
-                } else {
-                    layout.push(0);
-                }
-            }
-
-            width = w;
-            height = h;
-            level = layout;
-            nameInput.value = name;
-            diffInput.value = diff;
-            widthIn.value = w;
-            heightIn.value = h;
-        };
-
-        reader.readAsArrayBuffer(file);
-    };
-
-    fileInput.click();
-}
-
-function loadLevel() {
-    const data = output.value;
-
-    const size = parseInt(data.match(/\[(\d+)\]/)[1]);
-    const dataString = data.match(/\{([\s\S]*?)\}/)[1];
-    const array = dataString.split(',').map(num => parseInt(num.trim())).filter(num => !isNaN(num));
-    const inputHeight = parseInt(document.getElementById('height').value);
-    height = inputHeight;
-    width = size / height;
-    widthIn.value = width;
-
-    level = array;
-}
-
-function changeSize() {
-    const nWidth = parseInt(widthIn.value);
-    const nHeight = parseInt(heightIn.value);
-
+function changeSize(nw = width, nh = height) {
     let nLevel = [];
-    
-    const heightDiff = nHeight - height;
 
-    for (let y = 0; y < nHeight; y++) {
-        for (let x = 0; x < nWidth; x++) {
-            let oldY = y - heightDiff;
-            if (x < width && oldY >= 0 && oldY < height) {
-                let oldIndex = oldY * width + x;
-                nLevel.push(level[oldIndex]);
+    for (let y = 0; y < nh; y++) {
+        for (let x = 0; x < nw; x++) {
+            let oy = y - (nh - height);
+            if (x < width && oy >= 0 && oy < height) {
+                nLevel.push(level[oy * width + x]);
             } else {
                 nLevel.push(0);
             }
@@ -242,14 +228,35 @@ function changeSize() {
     }
 
     level = nLevel;
-    width = nWidth;
-    height = nHeight;
-    
-    c.height = height * tileSize;
+    width = nw;
+    height = nh;
+
+    updateLevelInfo();
+}
+
+function autoResize() {
+    let maxX = -1;
+    let minY = height;
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (level[y * width + x] !== 0) {
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+            }
+        }
+    }
+
+    const nw = Math.max(1, maxX + 18);
+    const nh = Math.min(20, minY < height ? height - minY : 1);
+
+    if (nw !== width || nh !== height) {
+        changeSize(nw, nh);
+    }
 }
 
 function testLevel() {
-    playerY = tileSize * (height - 1);
+    playerY = tileSize * 19;
     yVelocity = 0;
     levelX = 0;
     isGrounded = false;
@@ -259,12 +266,22 @@ function testLevel() {
     dead = false;
     isTesting = true;
     oldPlayerPos = [];
-    stopButton.style.visibility = 'visible';
+    document.getElementById('pausePlayImg').src = 'Sprites/Stop.svg';
 }
 
 function stopTesting() {
     isTesting = false;
-    stopButton.style.visibility = 'hidden';
+    document.getElementById('pausePlayImg').src = 'Sprites/Play.svg';
+}
+
+function playButton() {
+    if (isTesting) stopTesting();
+    else testLevel();
+}
+
+function updateLevelInfo() {
+    document.getElementById('dimensions').innerHTML = `Width: ${width}, Height: ${height}`;
+    document.getElementById('size').innerHTML = `Size: ${width * height}`;
 }
 
 function start() {
@@ -272,7 +289,7 @@ function start() {
         mouse.down = true;
     });
 
-    c.addEventListener('mouseup', () => {
+    document.addEventListener('mouseup', () => {
         mouse.down = false;
     });
 
@@ -291,6 +308,20 @@ function start() {
             }
         }
         pressedKeys.push(keyName);
+
+        //Shortcuts
+        if ((event.ctrlKey || event.metaKey)) {
+            if (event.key.toLowerCase() == 's') {
+                event.preventDefault();
+                saveLevel();
+            } else if (event.key.toLowerCase() == 'q') {
+                event.preventDefault();
+                testLevel();
+            }
+        }
+        if (keyName == 'Escape') {
+            stopTesting();
+        }
     });
 
     document.addEventListener('keyup', (event) => {
@@ -304,30 +335,67 @@ function start() {
         }
     });
 
+    c.addEventListener('wheel', (event) => {
+        event.preventDefault();
+
+        levelX += event.deltaX;
+        if (levelX < 0) levelX = 0;
+        if (levelX > width * tileSize) levelX = width * tileSize;
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (!unsavedChanges) return;
+
+        event.preventDefault();
+        event.returnValue = '';
+    });
+
+    window.addEventListener('resize', (event) => {
+        c.width = document.body.clientWidth;
+    });
+    c.height = 20*tileSize;
+
     newLevel();
 }
 
 function update() {
     ctx.clearRect(0, 0, c.width, c.height);
 
-    let gridX = Math.floor(mouse.x / tileSize);
+    let gridX = Math.floor((mouse.x + levelX) / tileSize);
     let gridY = Math.floor(mouse.y / tileSize);
 
     if (!isTesting) {
         if (mouse.down) {
-            let index = (gridY * width + Math.round(gridX + levelX / tileSize));
-            if (index < level.length) level[index] = mouse.selection;
+            if (gridX + 18 > width) {
+                changeSize(gridX + 18, height);
+            }
+
+            let levelY = gridY - (20 - height);
+
+            if (levelY < 0) {
+                changeSize(width, Math.min(20, height - levelY));
+                levelY = 0;
+            }
+
+            const index = levelY * width + gridX;
+
+            if (level[index] != mouse.tileId) {
+                level[index] = mouse.tileId;
+                unsavedChanges = true;
+            }
+
+            autoResize();
         }
 
         for (let i = 0; i < pressedKeys.length; i++) { 
             let key = pressedKeys[i];
-            if (!isNaN(Number(key))) mouse.selection = Number(key);
+            if (!isNaN(Number(key))) mouse.tileId = Number(key);
             if (key == 'ArrowUp' && key != lastKey) {
-                mouse.selection = (mouse.selection + 1) % 40;
+                mouse.tileId = (mouse.tileId + 1) % 40;
                 lastKey = key;
             } else if (key == 'ArrowDown' && key != lastKey) {
-                mouse.selection -= 1;
-                if (mouse.selection < 0) mouse.selection = 39;
+                mouse.tileId -= 1;
+                if (mouse.tileId < 0) mouse.tileId = 39;
                 lastKey = key;
             } else if (key == 'ArrowLeft') {
                 levelX -= 24;
@@ -348,7 +416,7 @@ function update() {
         ctx.drawImage(playerSprite, playerX, playerY, tileSize, tileSize);
     } else {
         ctx.globalAlpha = 0.5;
-        drawTile(mouse.selection, gridX * tileSize, gridY * tileSize);
+        drawTile(mouse.tileId, gridX * tileSize - levelX, gridY * tileSize);
         ctx.globalAlpha = 1;
     }
 
@@ -367,7 +435,7 @@ function update() {
     window.requestAnimationFrame(update);
 }
 
-function swap() {
+function swapTiles() {
     let temp = [];
     let swap = [
         0, 1, 2, 3, 4, 5, 6, 7, 13, 14, 15,
@@ -385,6 +453,29 @@ function swap() {
 
     level = temp;
     exportLevel();
+}
+
+function startEditing() {
+    const container = document.querySelector(".editableText");
+    const input = document.getElementById("levelNameInput");
+
+    container.classList.add("editing");
+
+    input.focus();
+    input.select();
+}
+
+function stopEditing() {
+    const container = document.querySelector(".editableText");
+    const input = document.getElementById("levelNameInput");
+
+    levelNameText.textContent = input.value;
+
+    container.classList.remove("editing");
+}
+
+function updateDiff() {
+
 }
 
 start();
