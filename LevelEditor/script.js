@@ -4,7 +4,6 @@ const ctx = c.getContext('2d');
 const output = document.getElementById('output');
 const stopButton = document.getElementById('stopButton');
 
-const diffInput = document.getElementById('diffInput');
 const levelNameText = document.getElementById("levelNameText");
 
 let level = [];
@@ -146,7 +145,7 @@ function loadLevelFromBuffer(buffer) {
 
     levelNameText.textContent = name;
 
-    diffInput.value = diff;
+    updateDiff(diff);
 
     changeSize();
     updateLevelInfo();
@@ -158,7 +157,7 @@ async function saveLevel() {
         return;
     }
 
-    const buffer = createLevelBuffer(levelNameText.textContent, parseInt(diffInput.value), width, height, level);
+    const buffer = createLevelBuffer(levelNameText.textContent, parseInt(diff), width, height, level);
 
     const writable = await currentFileHandle.createWritable();
 
@@ -474,8 +473,11 @@ function stopEditing() {
     container.classList.remove("editing");
 }
 
-function updateDiff() {
+function updateDiff(nDiff) {
+    const curDiff = document.getElementById('curDiff');
 
+    curDiff.src = `Sprites/diffIcon0${nDiff+1}.png`;
+    diff = nDiff;
 }
 
 start();

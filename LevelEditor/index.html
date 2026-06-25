@@ -25,7 +25,6 @@
             </div>
         </div>
         
-        
         <div onclick="playButton()"><img src="Sprites/Play.svg" width="20px" height="20px" id="pausePlayImg"></div>
 
         <div class="editableText" onclick="startEditing()">
@@ -37,13 +36,13 @@
         </div>
 
         <div class="dropdown">
-            <img src="Sprites/diffIcon01.png">
-            <div class="dropdownContent" class="diffDropdownContent">
-                <img src="Sprites/diffIcon01.png" class="diffImg">
-                <img src="Sprites/diffIcon02.png" class="diffImg">
-                <img src="Sprites/diffIcon03.png" class="diffImg">
-                <img src="Sprites/diffIcon04.png" class="diffImg">
-                <img src="Sprites/diffIcon05.png" class="diffImg">
+            <img src="Sprites/diffIcon01.png" class="diffImg" id="curDiff">
+            <div class="dropdownContent diffDropdownContent">
+                <div class="diffItem"><img src="Sprites/diffIcon01.png" class="diffImg" onclick="updateDiff(0)"></div>
+                <div class="diffItem"><img src="Sprites/diffIcon02.png" class="diffImg" onclick="updateDiff(1)"></div>
+                <div class="diffItem"><img src="Sprites/diffIcon03.png" class="diffImg" onclick="updateDiff(2)"></div>
+                <div class="diffItem"><img src="Sprites/diffIcon04.png" class="diffImg" onclick="updateDiff(3)"></div>
+                <div class="diffItem"><img src="Sprites/diffIcon05.png" class="diffImg" onclick="updateDiff(4)"></div>
             </div>
         </div>
 
@@ -51,7 +50,6 @@
     </div>
     
     <canvas id="c"></canvas>
-    <label>Difficulty: <input id="diffInput" type="number" value="0"></label>
 
     <script src="script.js"></script>
     <script src="collisions.js"></script>
