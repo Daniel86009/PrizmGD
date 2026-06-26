@@ -5,7 +5,7 @@ const gravity = 1.98 * 1.5;
 let scrollSpeed = 5.8 * 1.5;
 let ground = tileSize * 19;
 
-let playerX = 140;
+let playerX = tileSize * 6;
 let playerY = tileSize * 19;
 
 let yVelocity = 0;

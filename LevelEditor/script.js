@@ -7,7 +7,7 @@ const stopButton = document.getElementById('stopButton');
 const levelNameText = document.getElementById("levelNameText");
 
 let level = [];
-let mouse = {x: 0, y: 0, down: false, tileId: 1};
+let mouse = {x: 0, y: 0, down: false, tileId: 1, tool: 'paint'};
 let pressedKeys = [];
 let width = 120;
 let height = 20;
@@ -30,6 +30,11 @@ let currentFileHandle = null;
 let unsavedChanges = false;
 
 let oldPlayerPos = [];
+
+let undoStack = [];
+let redoStack = [];
+
+let startPos = {x: 0, y: 19};
 
 function drawTile(id, x, y) {
     const newTileID = id - 1;
@@ -69,12 +74,42 @@ function drawLevel(xOffset) {
     for (let x = startCol; x < endCol; x++) {
         for (let y = 0; y < height; y++) {
             let index = y * width + x;
+            let nx = (x * tileSize) - xOffset;
             if (level[index] != 0) {
-                let nx = (x * tileSize) - xOffset;
                 drawTile(level[index], nx, y * tileSize + yOffset);
             }
+
+            /*if (x == startPos.x && y == 19 - startPos.y) {
+                ctx.font = '10px sans-serif'
+                ctx.fillText('Start', nx, y * tileSize + (tileSize / 2) + yOffset);
+                ctx.fillText('Pos', nx, y * tileSize + (tileSize / 2 + 6) + yOffset);
+            }*/
         }
     }
+}
+
+function drawStartPos() {
+    const sx = startPos.x * tileSize - levelX + playerX;
+    const sy = startPos.y * tileSize;
+
+    if (sx + tileSize < 0 || sx > c.width) return;
+
+    ctx.font = '10px sans-serif'
+    ctx.fillText('Start', sx, sy + (tileSize / 2));
+    ctx.fillText('Pos', sx, sy + (tileSize / 2 + 6));
+}
+
+function setTile(index, newValue) {
+    const oldValue = level[index];
+
+    if (oldValue === newValue) return;
+
+    undoStack.push({index, oldValue, newValue});
+
+    redoStack.length = 0;
+
+    level[index] = newValue;
+    unsavedChanges = true;
 }
 
 function newLevel() {
@@ -86,6 +121,8 @@ function newLevel() {
     for (let i = 0; i < width*height; i++) {
         level.push(0);
     }
+
+    unsavedChanges = false;
 
     updateLevelInfo();
 }
@@ -255,9 +292,9 @@ function autoResize() {
 }
 
 function testLevel() {
-    playerY = tileSize * 19;
+    playerY = startPos.y * tileSize;//tileSize * 19;
     yVelocity = 0;
-    levelX = 0;
+    levelX = startPos.x * tileSize;
     isGrounded = false;
     rGrav = false;
     curOrbI = -1;
@@ -281,6 +318,32 @@ function playButton() {
 function updateLevelInfo() {
     document.getElementById('dimensions').innerHTML = `Width: ${width}, Height: ${height}`;
     document.getElementById('size').innerHTML = `Size: ${width * height}`;
+}
+
+function undo() {
+    if (undoStack.length == 0) return;
+
+    console.log(undoStack);
+
+    const action = undoStack.pop();
+
+    redoStack.push(action);
+
+    level[action.index] = action.oldValue;
+
+    autoResize();
+}
+
+function redo() {
+    if (redoStack.length == 0) return;
+
+    const action = redoStack.pop();
+
+    undoStack.push(action);
+
+    level[action.index] = action.newValue;
+
+    autoResize();
 }
 
 function start() {
@@ -316,10 +379,17 @@ function start() {
             } else if (event.key.toLowerCase() == 'q') {
                 event.preventDefault();
                 testLevel();
+            } else if (event.key.toLowerCase() == 'z') {
+                event.preventDefault();
+                undo();
             }
         }
         if (keyName == 'Escape') {
             stopTesting();
+        } else if (keyName == 'w') {
+            mouse.tool = 'paint';
+        } else if (keyName == 'e') {
+            mouse.tool = 'start';
         }
     });
 
@@ -349,7 +419,7 @@ function start() {
         event.returnValue = '';
     });
 
-    window.addEventListener('resize', (event) => {
+    window.addEventListener('resize', () => {
         c.width = document.body.clientWidth;
     });
     c.height = 20*tileSize;
@@ -376,11 +446,15 @@ function update() {
                 levelY = 0;
             }
 
-            const index = levelY * width + gridX;
+            if (mouse.tool == 'paint') {
+                const index = levelY * width + gridX;
 
-            if (level[index] != mouse.tileId) {
-                level[index] = mouse.tileId;
-                unsavedChanges = true;
+                if (level[index] != mouse.tileId) {
+                    setTile(index, mouse.tileId);
+                }
+            } else if (mouse.tool == 'start') {
+                startPos.x = gridX - 6;
+                startPos.y = gridY;
             }
 
             autoResize();
@@ -408,6 +482,7 @@ function update() {
     
     if (loaded) drawLevel(levelX);
     drawGrid(levelX);
+    drawStartPos();
 
     if (isTesting) {
         updatePlayer();
@@ -415,7 +490,12 @@ function update() {
         ctx.drawImage(playerSprite, playerX, playerY, tileSize, tileSize);
     } else {
         ctx.globalAlpha = 0.5;
-        drawTile(mouse.tileId, gridX * tileSize - levelX, gridY * tileSize);
+        if (mouse.tool == 'paint') drawTile(mouse.tileId, gridX * tileSize - levelX, gridY * tileSize);
+        else {
+            ctx.font = '10px sans-serif'
+            ctx.fillText('Start', gridX * tileSize - levelX, gridY * tileSize + (tileSize / 2));
+            ctx.fillText('Pos', gridX * tileSize - levelX, gridY * tileSize + (tileSize / 2 + 6));
+        }
         ctx.globalAlpha = 1;
     }
 

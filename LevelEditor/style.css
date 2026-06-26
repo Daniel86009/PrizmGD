@@ -140,7 +140,6 @@ canvas {
     object-fit: contain;
     margin-top: -6px;
     margin-bottom: -6px;
-    image-rendering: pixelated;
 }
 
 .diffDropdownContent {
