@@ -5,7 +5,6 @@ const gravity = 1.98 * 1.5;
 let scrollSpeed = 5.8 * 1.5;
 let ground = tileSize * 19;
 
-let playerX = tileSize * 6;
 let playerY = tileSize * 19;
 
 let yVelocity = 0;
@@ -16,9 +15,10 @@ const playerSize = 24;
 let rGrav = false;
 
 let isGrounded = false;
-
+let pIsGrounded = false;
 let canJumpOrb = false;
 let canBlueJumpOrb = false;
+let hasJumped = false;
 
 let curOrbI = -1;
 let lastOrbI = -1;
@@ -27,6 +27,9 @@ let dead = false;
 
 let targetFPS = 20;
 let lastFrameTime = performance.now();
+
+let playerRot = 0;
+let targetRot = 0;
 
 function AABB(ax, ay, aw, ah, bx, by, bw, bh) {
     return (
@@ -165,8 +168,9 @@ function collide() {
         }
     }
 
-    let worldGround = (20 * tileSize);
-    if (Math.floor(playerY) + playerSize > worldGround) {
+    
+    const worldGround = (20 * tileSize);
+    if (Math.floor(playerY) + playerSize >= worldGround) {
         playerY = worldGround - playerSize;
         if (jumpPad == false) yVelocity = 0;
         isGrounded = true;
@@ -183,21 +187,27 @@ function updatePlayer() {
 
     levelX += scrollSpeed;
 
+    let spacePressed = false;
     for (let i = 0; i < pressedKeys.length; i++) {
         let key = pressedKeys[i];
         if (key == ' ') {
-            if (canJumpOrb) {
-                yVelocity = jumpVel; //* 1.1;
+            spacePressed = true;
+            if (canJumpOrb && !hasJumped) {
+                yVelocity = jumpVel;
                 lastOrbI = curOrbI;
-            } else if (canBlueJumpOrb) {
+                hasJumped = true;
+            } else if (canBlueJumpOrb && !hasJumped) {
                 rGrav = !rGrav;
-                yVelocity = -jumpVel * 0.5;//-jumpVel * 1.1;
+                yVelocity = -jumpVel * 0.5;
                 lastOrbI = curOrbI;
+                hasJumped = true;
             } else if (isGrounded) {
                 yVelocity = jumpVel;
+                hasJumped = true;
             }
         }
     }
+    if (!spacePressed) hasJumped = false;
 
     yVelocity += gravity;
     if (rGrav) playerY -= yVelocity;
@@ -208,6 +218,24 @@ function updatePlayer() {
     canBlueJumpOrb = false;
     collide();
 
+    if (isGrounded == false && pIsGrounded == false) {
+        if (rGrav) targetRot -= 18;
+        else targetRot += 18;
+    } else {
+        let r = rGrav ? 9 : 54;
+        targetRot = Math.floor((playerRot + r) / 90) * 90;
+    }
+    targetRot = targetRot % 360;
+
+    let diff = ((targetRot - playerRot + 540) % 360) - 180;
+
+    if (Math.abs(diff) <= 18) {
+        playerRot = targetRot;
+    } else {
+        playerRot += Math.sign(diff) * 18;
+    }
+
+
     oldPlayerPos.push({x: levelX + playerX, y: playerY + (playerSize / 2)});
     
     if (playerY < -100) dead = true;
@@ -216,4 +244,6 @@ function updatePlayer() {
         stopTesting();
         return;
     }
+
+    pIsGrounded = isGrounded;
 }

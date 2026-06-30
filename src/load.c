@@ -6,14 +6,6 @@ LevelMetadata levels[MAX_LEVELS];
 int levelCount = 0;
 unsigned char curLayout[MAX_LAYOUT_SIZE];
 
-/*static void itoa_buf(char *buf, int n) {
-  if (n == 0) { buf[0]='0'; buf[1]='\0'; return; }
-  char tmp[12]; int i=0;
-  if (n < 0) { buf[0]='-'; itoa_buf(buf+1, -n); return; }
-  while (n > 0) { tmp[i++] = '0' + (n % 10); n /= 10; }
-  int j = 0; while (i > 0) buf[j++] = tmp[--i]; buf[j] = '\0';
-}*/
-
 static void narrow_to_wide(unsigned short *dest, const char *src) {
   while (*src) *dest++ = (unsigned short)(unsigned char)*src++;
   *dest = 0;

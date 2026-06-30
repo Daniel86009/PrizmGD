@@ -52,12 +52,14 @@ float yVelocity = 0.0f;
 const float jumpVel = -12.8f * 1.5f;
 
 float playerRot = 0.0f;
+float targetRot = 0.0f;
 const int playerSize = 24;
 
 bool isGrounded = false;
 bool pIsGrounded = false;
 bool canJumpOrb = false;
 bool canBlueJumpOrb = false;
+bool hasJumped = false;
 
 int curOrbI = -1;
 int lastOrbI = -1;
@@ -68,28 +70,9 @@ bool rGrav = false;
 
 //24 x 13
 
-/*static void itoa_buf(char *buf, int n) {
-  if (n == 0) { buf[0]='0'; buf[1]='\0'; return; }
-  char tmp[12]; int i=0;
-  if (n < 0) { buf[0]='-'; itoa_buf(buf+1, -n); return; }
-  while (n > 0) { tmp[i++] = '0' + (n % 10); n /= 10; }
-  int j = 0; while (i > 0) buf[j++] = tmp[--i]; buf[j] = '\0';
+int sign(int val) {
+  return (val > 0) - (val < 0);
 }
-
-static void debugShow(const char *label, int value, int ypos) {
-  char vbuf[16];
-  char full[48];
-  itoa_buf(vbuf, value);
-
-  int i = 0, j = 0;
-  while (label[i]) full[j++] = label[i++];
-  i = 0;
-  while (vbuf[i]) full[j++] = vbuf[i++];
-  full[j] = '\0';
-
-  int x = 10;
-  PrintMini(&x, &ypos, full, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
-}*/
 
 int keyDown(int basic_keycode) {
 	const unsigned short* keyboard_register = (unsigned short*)0xA44B0000;
@@ -498,17 +481,21 @@ void loop() {
     }
 
     if (keyDown(KEY_PRGM_UP) || keyDown(KEY_PRGM_SHIFT)) {
-      if (canJumpOrb) {
+      if (canJumpOrb && !hasJumped) {
         yVelocity = jumpVel;
         lastOrbI = curOrbI;
-      } else if (canBlueJumpOrb) {
+        hasJumped = true;
+      } else if (canBlueJumpOrb && !hasJumped) {
         rGrav = !rGrav;
         yVelocity = -jumpVel * 0.5;
         lastOrbI = curOrbI;
+        hasJumped = true;
       } else if (isGrounded) {
         yVelocity = jumpVel;
+        hasJumped = true;
       }
     }
+    if (!keyDown(KEY_PRGM_UP) && !keyDown(KEY_PRGM_SHIFT)) hasJumped = false;
 
     yVelocity += gravity;
     if (rGrav) playerY -= yVelocity;
@@ -533,15 +520,27 @@ void loop() {
     playerY -= cameraDeltaY;
 
     if (isGrounded == false && pIsGrounded == false) {
-      playerRot += 18.0f;
+      if (rGrav) targetRot -= 18;
+      else targetRot += 18;
     } else {
-      playerRot = (float)(((int)(playerRot + 54.0f) / 90) * 90);
+      const float r = rGrav ? 9.0f : 54.0f;
+      targetRot = (float)(((int)(playerRot + r) / 90) * 90);
+    }
+    if (targetRot >= 360.0f) targetRot = 0.0f;
+    if (targetRot < 0.0f) targetRot = 360.0f;
+
+    int diff = (((int)(targetRot - playerRot) + 540) % 360) - 180;
+
+    if (sign(diff) * diff <= 18) {
+      playerRot = targetRot;
+    } else {
+      playerRot += sign(diff) * 18;
     }
     if (playerRot >= 360.0f) playerRot = 0.0f;
+    if (playerRot < 0.0f) playerRot = 0.0f;
 
     //Out of bounds check
     if (levelY < -230.0f) dead = true;
-
 
     if (dead) {
       reset();

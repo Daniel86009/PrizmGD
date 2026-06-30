@@ -31,7 +31,7 @@ INCLUDES	:=
 # options for code and add-in generation
 #---------------------------------------------------------------------------------
 
-MKG3AFLAGS := -n basic:Platformer -i uns:../resource/unselected.bmp -i sel:../resource/selected.bmp
+MKG3AFLAGS := -n basic:PrizmGD -i uns:../resource/unselected.bmp -i sel:../resource/selected.bmp
 
 # Optional: add -flto to CFLAGS and LDFLAGS to enable link-time optimization
 # (LTO). Doing so will usually allow the compiler to generate much better code

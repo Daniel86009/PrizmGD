@@ -12,6 +12,8 @@ let pressedKeys = [];
 let width = 120;
 let height = 20;
 
+let view = {showHitboxes: false, rotatePlayer: true, showTrail: true, showStartPos: true};
+
 let levelX = 0;
 
 let sTileSize = 24
@@ -36,6 +38,8 @@ let redoStack = [];
 
 let startPos = {x: 0, y: 19};
 
+let playerX = tileSize * 6;
+
 function drawTile(id, x, y) {
     const newTileID = id - 1;
     const tilesPerRow = 10;
@@ -43,14 +47,14 @@ function drawTile(id, x, y) {
     const sx = (newTileID % tilesPerRow) * sTileSize;
     const sy = Math.floor(newTileID / tilesPerRow) * sTileSize;
 
+    ctx.beginPath();
     ctx.drawImage(tileSheet, sx, sy, sTileSize, sTileSize, x, y, tileSize, tileSize);
 }
 
 function drawGrid(xOffset) {
+    ctx.beginPath();
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#00000030';
-
-    ctx.beginPath();
 
     let startX = -(xOffset % tileSize);
     for (let x = startX; x <= c.width; x += tileSize) {
@@ -79,11 +83,27 @@ function drawLevel(xOffset) {
                 drawTile(level[index], nx, y * tileSize + yOffset);
             }
 
-            /*if (x == startPos.x && y == 19 - startPos.y) {
-                ctx.font = '10px sans-serif'
-                ctx.fillText('Start', nx, y * tileSize + (tileSize / 2) + yOffset);
-                ctx.fillText('Pos', nx, y * tileSize + (tileSize / 2 + 6) + yOffset);
-            }*/
+            if (view.showHitboxes) {
+                if (level[index] > 0) {
+                    let shape = collisions[level[index] - 1];
+
+                    ctx.beginPath();
+                    ctx.lineWidth = 1;
+                    switch (shape.collisionType) {
+                        case 1:
+                            ctx.strokeStyle = 'red';
+                            ctx.strokeRect(nx + shape.x, y * tileSize + yOffset + shape.y, shape.width, shape.height);
+                            ctx.stroke();
+                            break;
+                        case 2: case 3: case 5: case 6: case 7: case 8:
+                            ctx.strokeStyle = 'blue';
+                            ctx.strokeRect(nx + shape.x, y * tileSize + yOffset + shape.y, shape.width, shape.height);
+                            ctx.stroke();
+                            break;
+                    }
+                    
+                }
+            }
         }
     }
 }
@@ -130,6 +150,8 @@ function newLevel() {
 async function openLevel() {
     try {
         const [fileHandle] = await window.showOpenFilePicker({
+            id: 'level-files',
+            startIn: 'documents',
             types: [{
                 description: 'Level Files',
                 accept: {
@@ -179,6 +201,8 @@ function loadLevelFromBuffer(buffer) {
     width = w;
     height = h;
     level = layout;
+    undoStack = [];
+    redoStack = [];
 
     levelNameText.textContent = name;
 
@@ -205,6 +229,8 @@ async function saveLevel() {
 
 async function saveLevelAs() {
     const fileHandle = await window.showSaveFilePicker({
+        id: 'level-files',
+        startIn: 'documents',
         suggestedName: `${levelNameText.textContent}.lvl`,
         types: [{
             description: 'Level Files',
@@ -293,6 +319,8 @@ function autoResize() {
 
 function testLevel() {
     playerY = startPos.y * tileSize;//tileSize * 19;
+    playerRot = 0;
+    targetRot = 0;
     yVelocity = 0;
     levelX = startPos.x * tileSize;
     isGrounded = false;
@@ -408,6 +436,7 @@ function start() {
         event.preventDefault();
 
         levelX += event.deltaX;
+        levelX += event.deltaY;
         if (levelX < 0) levelX = 0;
         if (levelX > width * tileSize) levelX = width * tileSize;
     });
@@ -422,7 +451,8 @@ function start() {
     window.addEventListener('resize', () => {
         c.width = document.body.clientWidth;
     });
-    c.height = 20*tileSize;
+
+    c.height = 20 * tileSize;
 
     newLevel();
 }
@@ -482,12 +512,18 @@ function update() {
     
     if (loaded) drawLevel(levelX);
     drawGrid(levelX);
-    drawStartPos();
+    if (view.showStartPos) drawStartPos();
 
     if (isTesting) {
         updatePlayer();
 
+        if (view.rotatePlayer) {
+            ctx.translate(playerX + tileSize / 2, playerY + tileSize / 2);
+            ctx.rotate(playerRot * Math.PI / 180);
+            ctx.translate(-(playerX + tileSize / 2), -(playerY + tileSize / 2));
+        }
         ctx.drawImage(playerSprite, playerX, playerY, tileSize, tileSize);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
     } else {
         ctx.globalAlpha = 0.5;
         if (mouse.tool == 'paint') drawTile(mouse.tileId, gridX * tileSize - levelX, gridY * tileSize);
@@ -499,7 +535,7 @@ function update() {
         ctx.globalAlpha = 1;
     }
 
-    if (oldPlayerPos[0]) {
+    if (view.showTrail && oldPlayerPos[0]) {
         ctx.beginPath();
         ctx.strokeStyle = '#37ff00';
         ctx.lineWidth = 1;
@@ -558,6 +594,52 @@ function updateDiff(nDiff) {
 
     curDiff.src = `Sprites/diffIcon0${nDiff+1}.png`;
     diff = nDiff;
+}
+
+function changeView(type) {
+    let elem = null;
+    switch (type) {
+        case 0:
+            elem = document.getElementById('showHitboxes');
+            if (view.showHitboxes) {
+                view.showHitboxes = false;
+                elem.innerHTML = 'Show Hitboxes';
+            } else {
+                view.showHitboxes = true;
+                elem.innerHTML = 'Hide Hitboxes';
+            }
+            break;
+        case 1:
+            elem = document.getElementById('rotatePlayer');
+            if (view.rotatePlayer) {
+                view.rotatePlayer = false;
+                elem.innerHTML = 'Show Player Rot';
+            } else {
+                view.rotatePlayer = true;
+                elem.innerHTML = 'Hide Player Rot';
+            }
+            break;
+        case 2:
+            elem = document.getElementById('showTrail');
+            if (view.showTrail) {
+                view.showTrail = false;
+                elem.innerHTML = 'Show Trail';
+            } else {
+                view.showTrail = true;
+                elem.innerHTML = 'Hide Trail';
+            }
+            break;
+        case 3:
+            elem = document.getElementById('showStartPos');
+            if (view.showStartPos) {
+                view.showStartPos = false;
+                elem.innerHTML = 'Show Start Pos';
+            } else {
+                view.showStartPos = true;
+                elem.innerHTML = 'Hide Start Pos';
+            }
+            break;
+    }
 }
 
 start();

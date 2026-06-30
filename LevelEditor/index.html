@@ -26,6 +26,16 @@
                 <div onclick="startPos = {x: 0, y: 19}">Reset Start Pos</div>
             </div>
         </div>
+
+        <div class="dropdown">
+            <p>View</p>
+            <div class="dropdownContent">
+                <div onclick="changeView(0)" id="showHitboxes">Show Hitboxes</div>
+                <div onclick="changeView(1)" id="rotatePlayer">Hide Player Rot</div>
+                <div onclick="changeView(2)" id="showTrail">Hide Trail</div>
+                <div onclick="changeView(3)" id="showStartPos">Hide Start Pos</div>
+            </div>
+        </div>
         
         <div onclick="playButton()"><img src="Sprites/Play.svg" width="20px" height="20px" id="pausePlayImg"></div>
 
