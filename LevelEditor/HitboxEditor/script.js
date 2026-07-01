@@ -19,7 +19,7 @@ let x = 0, y = 0, w = 24, h = 24;
 let draggingCorner = null;
 
 const tileSheet = new Image();
-tileSheet.src = '../Sprites/spritesheet x24.png';
+tileSheet.src = '../Sprites/spritesheet x24 new.png';
 tileSheet.onload = function() {update()};
 
 function drawTile(tileID, x, y) {

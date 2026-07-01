@@ -8,6 +8,7 @@ const levelNameText = document.getElementById("levelNameText");
 
 let level = [];
 let mouse = {x: 0, y: 0, down: false, tileId: 1, tool: 'paint'};
+let selection = {x: null, y: null, w: 0, h: 0, tiles: [], undo: []};
 let pressedKeys = [];
 let width = 120;
 let height = 20;
@@ -25,7 +26,7 @@ let lastKey = null;
 
 let loaded = false;
 const tileSheet = new Image();
-tileSheet.src = 'Sprites/spritesheet x24.png';
+tileSheet.src = 'Sprites/spritesheet x24 new.png';
 tileSheet.onload = function() {loaded = true};
 
 let currentFileHandle = null;
@@ -83,25 +84,26 @@ function drawLevel(xOffset) {
                 drawTile(level[index], nx, y * tileSize + yOffset);
             }
 
+            if (selection.tiles.includes(index)) {
+                ctx.fillStyle = '#37ff0083';
+                ctx.fillRect(nx, y * tileSize + yOffset, tileSize, tileSize);
+            }
+
             if (view.showHitboxes) {
                 if (level[index] > 0) {
                     let shape = collisions[level[index] - 1];
 
                     ctx.beginPath();
                     ctx.lineWidth = 1;
-                    switch (shape.collisionType) {
-                        case 1:
-                            ctx.strokeStyle = 'red';
-                            ctx.strokeRect(nx + shape.x, y * tileSize + yOffset + shape.y, shape.width, shape.height);
-                            ctx.stroke();
-                            break;
-                        case 2: case 3: case 5: case 6: case 7: case 8:
-                            ctx.strokeStyle = 'blue';
-                            ctx.strokeRect(nx + shape.x, y * tileSize + yOffset + shape.y, shape.width, shape.height);
-                            ctx.stroke();
-                            break;
+                    if (shape.collisionType > 2) {
+                        ctx.strokeStyle = 'blue';
+                        ctx.strokeRect(nx + shape.x, y * tileSize + yOffset + shape.y, shape.width, shape.height);
+                        ctx.stroke();
+                    } else if (shape.collisionType == 2) {
+                        ctx.strokeStyle = 'red';
+                        ctx.strokeRect(nx + shape.x, y * tileSize + yOffset + shape.y, shape.width, shape.height);
+                        ctx.stroke();
                     }
-                    
                 }
             }
         }
@@ -114,7 +116,8 @@ function drawStartPos() {
 
     if (sx + tileSize < 0 || sx > c.width) return;
 
-    ctx.font = '10px sans-serif'
+    ctx.font = '10px sans-serif';
+    ctx.fillStyle = '#000000';
     ctx.fillText('Start', sx, sy + (tileSize / 2));
     ctx.fillText('Pos', sx, sy + (tileSize / 2 + 6));
 }
@@ -135,7 +138,7 @@ function setTile(index, newValue) {
 function newLevel() {
     width = 1;
     height = 1;
-    c.width = document.body.clientWidth;
+    c.width = document.body.clientWidth - 2;
 
     level = [];
     for (let i = 0; i < width*height; i++) {
@@ -296,7 +299,7 @@ function changeSize(nw = width, nh = height) {
     updateLevelInfo();
 }
 
-function autoResize() {
+/*function autoResize() {
     let maxX = -1;
     let minY = height;
 
@@ -314,6 +317,41 @@ function autoResize() {
 
     if (nw !== width || nh !== height) {
         changeSize(nw, nh);
+    }
+}*/
+
+function autoResize() {
+    let positions = [];
+    for (let i = 0; i < selection.tiles.length; i++) {
+        positions.push({
+            x: selection.tiles[i] % width,
+            y: Math.floor(selection.tiles[i] / width)
+        });
+    }
+
+    let maxX = -1;
+    let minY = height;
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (level[y * width + x] !== 0) {
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+            }
+        }
+    }
+
+    const nw = Math.max(1, maxX + 18);
+    const nh = Math.min(20, minY < height ? height - minY : 1);
+    if (nw !== width || nh !== height) {
+        const yShift = nh - height;
+
+        changeSize(nw, nh);
+
+        selection.tiles = [];
+
+        for (let i = 0; i < positions.length; i++) {
+            selection.tiles.push((positions[i].y + yShift) * width + positions[i].x);
+        }
     }
 }
 
@@ -374,6 +412,148 @@ function redo() {
     autoResize();
 }
 
+function select() {
+    let minX = Math.floor((selection.x + levelX) / tileSize);
+    let maxX = Math.ceil((selection.x + levelX + selection.w) / tileSize);
+    let minY = Math.floor(selection.y / tileSize) - 20 + height;
+    let maxY = Math.ceil((selection.y + selection.h) / tileSize) - 20 + height;
+
+    if (minX > maxX) [minX, maxX] = [maxX, minX];
+    if (minY > maxY) [minY, maxY] = [maxY, minY];
+
+    for (let y = minY; y < maxY; y++) {
+        for (let x = minX; x < maxX; x++) {
+            let tile = y * width + x;
+            if (selection.tiles.includes(tile)) selection.tiles = selection.tiles.filter((t) => t != tile);
+            else if (level[tile] != undefined && level[tile] != 0) selection.tiles.push(tile);
+        }
+    }
+}
+
+/*function moveSelection(xAmount, yAmount) {
+    selection.tiles.sort();
+    if (xAmount > 0 || yAmount > 0) selection.tiles = selection.tiles.toReversed();
+
+    let types = [];
+    let positions = [];
+    let maxX = 0;
+    let maxY = 0;
+    
+    for (let i = 0; i < selection.tiles.length; i++) {
+        /*let nTile = selection.tiles[i] + xAmount + yAmount * width;
+
+        if (nTile % width > maxX) maxX = nTile % width;
+        if (Math.floor(nTile / width) > maxY) maxY = Math.floor(nTile / width);*
+
+        types.push(level[selection.tiles[i]]);
+        positions.push({x: selection.tiles[i] % width, y: Math.floor(selection.tiles[i] / width)});
+    }
+
+    for (let p of positions) {
+        let nx = p.x + xAmount;
+        let ny = p.y + yAmount;
+
+        maxX = Math.max(maxX, nx);
+        maxY = Math.max(maxY, ny);
+
+        level[p.x + p.y * width] = 0;
+    }
+
+    selection.tiles = [];
+
+    for (let i = 0; i < positions.length; i++) {
+        let nx = positions[i].x + xAmount;
+        let ny = positions[i].y + yAmount;
+
+        let newIndex = nx + ny * width;
+
+        level[newIndex] = types[i];
+        selection.tiles.push(newIndex);
+    }
+
+    if (maxX + 18 > width) {
+        changeSize(maxX + 18, height);
+    }
+    let levelY = maxY - (20 - height);
+    if (levelY < 0) {
+        changeSize(width, Math.min(20, height - levelY));
+        levelY = 0;
+    }
+
+    /*for (let i = 0; i < selection.tiles.length; i++) {
+        let tile = selection.tiles[i];
+        let nTile = tile + xAmount + yAmount * width;
+        level[tile] = 0;
+        level[nTile] = types[i];
+        selection.tiles[i] = nTile;
+    }*
+
+    autoResize();
+}*/
+
+function moveSelection(xAmount, yAmount) {
+    selection.tiles.sort((a, b) => a - b);
+    if (xAmount > 0 || yAmount > 0) selection.tiles = selection.tiles.toReversed();
+
+    let types = [];
+    let positions = [];
+    let maxX = 0;
+    let maxY = 0;
+
+    for (let i = 0; i < selection.tiles.length; i++) {
+        let tile = selection.tiles[i];
+
+        let x = tile % width;
+        let y = Math.floor(tile / width);
+
+        positions.push({ x, y });
+        types.push(level[tile]);
+
+        let nx = x + xAmount;
+        let ny = y + yAmount;
+
+        if (nx > maxX) maxX = nx;
+        if (ny > maxY) maxY = ny;
+    }
+
+    let nWidth = width;
+    let nHeight = height;
+
+    if (maxX + 18 > nWidth) {
+        nWidth = maxX + 18;
+    }
+    let levelY = maxY - (20 - nHeight);
+    if (levelY < 0) nHeight = Math.min(20, nHeight - levelY);
+
+    let yShift = nHeight - height;
+    if (nWidth != width || nHeight != height) {
+        changeSize(nWidth, nHeight);
+
+        for (let i = 0; i < positions.length; i++) {
+            positions[i].y += yShift;
+        }
+    }
+
+    for (let i = 0; i < positions.length; i++) {
+        let p = positions[i];
+        level[p.y * width + p.x] = 0;
+    }
+
+    selection.tiles = [];
+
+    for (let i = 0; i < positions.length; i++) {
+        let nx = positions[i].x + xAmount;
+        let ny = positions[i].y + yAmount;
+
+        let index = ny * width + nx;
+
+        level[index] = types[i];
+        selection.tiles.push(index);
+    }
+
+    autoResize();
+}
+
 function start() {
     c.addEventListener('mousedown', () => {
         mouse.down = true;
@@ -416,8 +596,16 @@ function start() {
             stopTesting();
         } else if (keyName == 'w') {
             mouse.tool = 'paint';
+            selection.tiles = [];
+            lastKey = keyName;
         } else if (keyName == 'e') {
             mouse.tool = 'start';
+            selection.tiles = [];
+        } else if (keyName == 'r') {
+            mouse.tool = 'select';
+        } else if (keyName == 'Backspace' && selection.tiles.length > 0) {
+            for (let i = 0; i < selection.tiles.length; i++) level[selection.tiles[i]] = 0;
+            selection.tiles = [];
         }
     });
 
@@ -449,7 +637,7 @@ function start() {
     });
 
     window.addEventListener('resize', () => {
-        c.width = document.body.clientWidth;
+        c.width = document.body.clientWidth - 2;
     });
 
     c.height = 20 * tileSize;
@@ -485,27 +673,61 @@ function update() {
             } else if (mouse.tool == 'start') {
                 startPos.x = gridX - 6;
                 startPos.y = gridY;
+                mouse.down = false;
+                mouse.tool = 'paint';
+            } else if (mouse.tool == 'select') {
+                if (!selection.x) {
+                    selection.x = mouse.x;
+                    selection.y = mouse.y;
+                } else {
+                    selection.w = mouse.x - selection.x;
+                    selection.h = mouse.y - selection.y;
+                }
             }
 
             autoResize();
+        } else {
+            if (selection.x) {
+                select();
+            }
+            selection.x = null;
+            selection.y = null;
+            selection.w = 0;
+            selection.h = 0;
         }
 
         for (let i = 0; i < pressedKeys.length; i++) { 
             let key = pressedKeys[i];
-            if (!isNaN(Number(key))) mouse.tileId = Number(key);
-            if (key == 'ArrowUp' && key != lastKey) {
-                mouse.tileId = (mouse.tileId + 1) % 40;
-                lastKey = key;
-            } else if (key == 'ArrowDown' && key != lastKey) {
-                mouse.tileId -= 1;
-                if (mouse.tileId < 0) mouse.tileId = 39;
-                lastKey = key;
-            } else if (key == 'ArrowLeft') {
-                levelX -= 24;
-                if (levelX < 0) levelX = 0;
-            } else if (key == 'ArrowRight') {
-                levelX += 24;
-                if (levelX > width * tileSize) levelX = width * tileSize;
+            if (mouse.tool != 'select' && selection.tiles.length <= 0) {
+                if (!isNaN(Number(key))) mouse.tileId = Number(key);
+                if (key == 'ArrowUp' && key != lastKey) {
+                    mouse.tileId = (mouse.tileId + 1) % 49;
+                    lastKey = key;
+                } else if (key == 'ArrowDown' && key != lastKey) {
+                    mouse.tileId -= 1;
+                    if (mouse.tileId < 0) mouse.tileId = 48;
+                    lastKey = key;
+                } else if (key == 'ArrowLeft') {
+                    levelX -= 24;
+                    if (levelX < 0) levelX = 0;
+                } else if (key == 'ArrowRight') {
+                    levelX += 24;
+                    if (levelX > width * tileSize) levelX = width * tileSize;
+                }
+            } else {
+                if (key == 'ArrowUp' && key != lastKey) {
+                    moveSelection(0, -1);
+                    lastKey = key;
+                } else if (key == 'ArrowDown' && key != lastKey) {
+                    moveSelection(0, 1);
+                    lastKey = key;
+                } else if (key == 'ArrowLeft' && key != lastKey) {
+                    moveSelection(-1, 0);
+                    lastKey = key;
+                } else if (key == 'ArrowRight' && key != lastKey) {
+                    moveSelection(1, 0);
+                    lastKey = key;
+                }
             }
         }
     }
@@ -527,7 +749,7 @@ function update() {
     } else {
         ctx.globalAlpha = 0.5;
         if (mouse.tool == 'paint') drawTile(mouse.tileId, gridX * tileSize - levelX, gridY * tileSize);
-        else {
+        else if (mouse.tool == 'start') {
             ctx.font = '10px sans-serif'
             ctx.fillText('Start', gridX * tileSize - levelX, gridY * tileSize + (tileSize / 2));
             ctx.fillText('Pos', gridX * tileSize - levelX, gridY * tileSize + (tileSize / 2 + 6));
@@ -547,15 +769,24 @@ function update() {
         ctx.stroke();
     }
 
+    if (selection.x && selection.y) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#37ff00';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(selection.x, selection.y, selection.w, selection.h);
+    }
+
     window.requestAnimationFrame(update);
 }
 
 function swapTiles() {
     let temp = [];
     let swap = [
-        0, 1, 2, 3, 4, 5, 6, 7, 13, 14, 15,
-        16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-        26, 28, 27, 12, 35, 36, 37, 38, 39
+         0,  1,  2,  3,  4,  5,  6,  7,  8, 15,
+        16, 17, 20, 21, 22, 23, 24, 25, 27, 28,
+        29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+        39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+        49
     ];
 
     for (let i = 0; i < level.length; i++) {
@@ -567,7 +798,6 @@ function swapTiles() {
     }
 
     level = temp;
-    exportLevel();
 }
 
 function startEditing() {

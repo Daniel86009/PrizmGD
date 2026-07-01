@@ -16,8 +16,7 @@ let rGrav = false;
 
 let isGrounded = false;
 let pIsGrounded = false;
-let canJumpOrb = false;
-let canBlueJumpOrb = false;
+let canJumpOrb = [false, false, false, false, false, false];
 let hasJumped = false;
 
 let curOrbI = -1;
@@ -63,24 +62,30 @@ function collide() {
             if (tileID <= 0) continue;
 
             let shape = collisions[tileID - 1];
-            if (shape.collisionType == 4) continue;
+            if (shape.collisionType == 0) continue;
 
             let tileWX = x * tileSize + shape.x;
             let tileWY = y * tileSize + shape.y + (20 - height) * tileSize;
 
             if (AABB(pWX, pWY, playerSize, playerSize, tileWX, tileWY, shape.width, shape.height)) {
                 switch (shape.collisionType) {
-                    case 1:
+                    case 2: //Spike
                         dead = true;
                         return;
-                    case 2: case 5:
+                    case 3: case 5: case 7: case 9: case 11: case 12: //Orbs
                         curOrbI = mapIndex;
                         if (lastOrbI != curOrbI) {
-                            if (shape.collisionType == 2) canJumpOrb = true;
-                            else canBlueJumpOrb = true;
+                            switch (shape.collisionType) {
+                                case 3: canJumpOrb[0] = true; break;
+                                case 5: canJumpOrb[1] = true; break;
+                                case 7: canJumpOrb[2] = true; break;
+                                case 9: canJumpOrb[3] = true; break;
+                                case 11: canJumpOrb[4] = true; break;
+                                case 12: canJumpOrb[5] = true; break;
+                            }
                         }
                         continue;
-                    case 3:
+                    case 4: //Yellow Pad
                         curOrbI = mapIndex;
                         if (lastOrbI != curOrbI) {
                             playerY = tileWY - playerSize;
@@ -93,11 +98,36 @@ function collide() {
                             jumpPad = true;
                         }
                         continue;
-                    case 6:
+                    case 6: //Pink Pad
+                        curOrbI = mapIndex;
+                        if (lastOrbI != curOrbI) {
+                            playerY = tileWY - playerSize;
+
+                            pWY = playerY - playerSize;
+
+                            yVelocity = jumpVel * 0.88;
+
+                            lastOrbI = curOrbI;
+                            jumpPad = true;
+                        }
+                        continue;
+                    case 8: //Red Pad
+                        curOrbI = mapIndex;
+                        if (lastOrbI != curOrbI) {
+                            playerY = tileWY - playerSize;
+
+                            pWY = playerY - playerSize;
+
+                            yVelocity = jumpVel * 1.69;
+
+                            lastOrbI = curOrbI;
+                            jumpPad = true;
+                        }
+                        continue;
+                    case 10: //Blue Pad
                         curOrbI = mapIndex;
                         if (lastOrbI != curOrbI) {
                             rGrav = !rGrav;
-                            //yVelocity = 0;//-jumpVel * 1.36;
               
                             if (!rGrav) {
                                 playerY = tileWY + shape.height;
@@ -112,14 +142,13 @@ function collide() {
                             jumpPad = true;
                         }
                         continue;
-                    case 7:
+                    case 13: //Blue Portal
                         if (rGrav != false) {
                             rGrav = false;
                             yVelocity = -yVelocity;
                         }
-
                         continue;
-                    case 8:
+                    case 14: //Yellow Portal
                         if (rGrav != true) {
                             rGrav = true;
                             yVelocity = -yVelocity;
@@ -127,7 +156,7 @@ function collide() {
                         continue;
                 }
 
-                if (shape.collisionType == 0) {
+                if (shape.collisionType == 1) {
                     if (rGrav) {
                         //Reversed gravity
                         if (yVelocity >= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
@@ -177,6 +206,46 @@ function collide() {
     }
 }
 
+function checkJumpOrb() {
+    if (hasJumped) return true;
+    
+    if (canJumpOrb[0]) {
+        yVelocity = jumpVel;
+        lastOrbI = curOrbI;
+        hasJumped = true;
+        return false;
+    } else if (canJumpOrb[1]) {
+        yVelocity = jumpVel * 0.8;
+        lastOrbI = curOrbI;
+        hasJumped = true;
+        return false;
+    } else if (canJumpOrb[2]) {
+        yVelocity = jumpVel * 1.3;
+        lastOrbI = curOrbI;
+        hasJumped = true;
+        return false;
+    } else if (canJumpOrb[3]) {
+        rGrav = !rGrav;
+        yVelocity = -jumpVel * 0.5;
+        lastOrbI = curOrbI;
+        hasJumped = true;
+        return false;
+    } else if (canJumpOrb[4]) {
+        rGrav = !rGrav;
+        yVelocity = jumpVel;
+        lastOrbI = curOrbI;
+        hasJumped = true;
+        return false;
+    } else if (canJumpOrb[5]) {
+        yVelocity = -jumpVel;
+        lastOrbI = curOrbI;
+        hasJumped = true;
+        return false;
+    }
+
+    return true;
+}
+
 function updatePlayer() {
     const currentTime = performance.now();
     const elapsedTime = currentTime - lastFrameTime;
@@ -192,16 +261,8 @@ function updatePlayer() {
         let key = pressedKeys[i];
         if (key == ' ') {
             spacePressed = true;
-            if (canJumpOrb && !hasJumped) {
-                yVelocity = jumpVel;
-                lastOrbI = curOrbI;
-                hasJumped = true;
-            } else if (canBlueJumpOrb && !hasJumped) {
-                rGrav = !rGrav;
-                yVelocity = -jumpVel * 0.5;
-                lastOrbI = curOrbI;
-                hasJumped = true;
-            } else if (isGrounded) {
+            
+            if (checkJumpOrb() && isGrounded) {
                 yVelocity = jumpVel;
                 hasJumped = true;
             }
@@ -214,8 +275,7 @@ function updatePlayer() {
     else playerY += yVelocity;
 
     isGrounded = false;
-    canJumpOrb = false;
-    canBlueJumpOrb = false;
+    for (let i = 0; i < canJumpOrb.length; i++) canJumpOrb[i] = false;
     collide();
 
     if (isGrounded == false && pIsGrounded == false) {
