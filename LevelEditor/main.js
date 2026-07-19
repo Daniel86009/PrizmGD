@@ -17,7 +17,7 @@ let view = {showHitboxes: false, rotatePlayer: true, showTrail: true, showStartP
 
 let levelX = 0;
 
-let sTileSize = 24
+let sTileSize = 24;
 let tileSize = sTileSize;
 
 let isTesting = false;
@@ -27,7 +27,7 @@ let lastKey = null;
 let loaded = false;
 const tileSheet = new Image();
 tileSheet.src = 'Sprites/spritesheet x24 new.png';
-tileSheet.onload = function() {loaded = true};
+tileSheet.onload = function() {loaded = true; populateTileSelect();};
 
 let currentFileHandle = null;
 let unsavedChanges = false;
@@ -40,6 +40,7 @@ let redoStack = [];
 let startPos = {x: 0, y: 19};
 
 let playerX = tileSize * 6;
+let t = 0;
 
 function drawTile(id, x, y) {
     const newTileID = id - 1;
@@ -208,6 +209,9 @@ function loadLevelFromBuffer(buffer) {
     redoStack = [];
 
     levelNameText.textContent = name;
+    
+    unsavedChanges = false;
+    selection.tiles = [];
 
     updateDiff(diff);
 
@@ -299,27 +303,6 @@ function changeSize(nw = width, nh = height) {
     updateLevelInfo();
 }
 
-/*function autoResize() {
-    let maxX = -1;
-    let minY = height;
-
-    for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-            if (level[y * width + x] !== 0) {
-                if (x > maxX) maxX = x;
-                if (y < minY) minY = y;
-            }
-        }
-    }
-
-    const nw = Math.max(1, maxX + 18);
-    const nh = Math.min(20, minY < height ? height - minY : 1);
-
-    if (nw !== width || nh !== height) {
-        changeSize(nw, nh);
-    }
-}*/
-
 function autoResize() {
     let positions = [];
     for (let i = 0; i < selection.tiles.length; i++) {
@@ -389,8 +372,6 @@ function updateLevelInfo() {
 function undo() {
     if (undoStack.length == 0) return;
 
-    console.log(undoStack);
-
     const action = undoStack.pop();
 
     redoStack.push(action);
@@ -429,67 +410,6 @@ function select() {
         }
     }
 }
-
-/*function moveSelection(xAmount, yAmount) {
-    selection.tiles.sort();
-    if (xAmount > 0 || yAmount > 0) selection.tiles = selection.tiles.toReversed();
-
-    let types = [];
-    let positions = [];
-    let maxX = 0;
-    let maxY = 0;
-    
-    for (let i = 0; i < selection.tiles.length; i++) {
-        /*let nTile = selection.tiles[i] + xAmount + yAmount * width;
-
-        if (nTile % width > maxX) maxX = nTile % width;
-        if (Math.floor(nTile / width) > maxY) maxY = Math.floor(nTile / width);*
-
-        types.push(level[selection.tiles[i]]);
-        positions.push({x: selection.tiles[i] % width, y: Math.floor(selection.tiles[i] / width)});
-    }
-
-    for (let p of positions) {
-        let nx = p.x + xAmount;
-        let ny = p.y + yAmount;
-
-        maxX = Math.max(maxX, nx);
-        maxY = Math.max(maxY, ny);
-
-        level[p.x + p.y * width] = 0;
-    }
-
-    selection.tiles = [];
-
-    for (let i = 0; i < positions.length; i++) {
-        let nx = positions[i].x + xAmount;
-        let ny = positions[i].y + yAmount;
-
-        let newIndex = nx + ny * width;
-
-        level[newIndex] = types[i];
-        selection.tiles.push(newIndex);
-    }
-
-    if (maxX + 18 > width) {
-        changeSize(maxX + 18, height);
-    }
-    let levelY = maxY - (20 - height);
-    if (levelY < 0) {
-        changeSize(width, Math.min(20, height - levelY));
-        levelY = 0;
-    }
-
-    /*for (let i = 0; i < selection.tiles.length; i++) {
-        let tile = selection.tiles[i];
-        let nTile = tile + xAmount + yAmount * width;
-        level[tile] = 0;
-        level[nTile] = types[i];
-        selection.tiles[i] = nTile;
-    }*
-
-    autoResize();
-}*/
 
 function moveSelection(xAmount, yAmount) {
     selection.tiles.sort((a, b) => a - b);
@@ -550,6 +470,8 @@ function moveSelection(xAmount, yAmount) {
         level[index] = types[i];
         selection.tiles.push(index);
     }
+
+    unsavedChanges = true;
 
     autoResize();
 }
@@ -653,23 +575,24 @@ function update() {
 
     if (!isTesting) {
         if (mouse.down) {
-            if (gridX + 18 > width) {
-                changeSize(gridX + 18, height);
-            }
-
-            let levelY = gridY - (20 - height);
-
-            if (levelY < 0) {
-                changeSize(width, Math.min(20, height - levelY));
-                levelY = 0;
-            }
-
             if (mouse.tool == 'paint') {
+                if (gridX + 18 > width) {
+                    changeSize(gridX + 18, height);
+                }
+
+                let levelY = gridY - (20 - height);
+
+                if (levelY < 0) {
+                    changeSize(width, Math.min(20, height - levelY));
+                    levelY = 0;
+                }
+
                 const index = levelY * width + gridX;
 
                 if (level[index] != mouse.tileId) {
                     setTile(index, mouse.tileId);
                 }
+                autoResize();
             } else if (mouse.tool == 'start') {
                 startPos.x = gridX - 6;
                 startPos.y = gridY;
@@ -684,8 +607,6 @@ function update() {
                     selection.h = mouse.y - selection.y;
                 }
             }
-
-            autoResize();
         } else {
             if (selection.x) {
                 select();
@@ -737,7 +658,9 @@ function update() {
     if (view.showStartPos) drawStartPos();
 
     if (isTesting) {
-        updatePlayer();
+        for (let i = 0; i < substeps; i++) {
+            updatePlayer(1 / substeps);
+        }
 
         if (view.rotatePlayer) {
             ctx.translate(playerX + tileSize / 2, playerY + tileSize / 2);

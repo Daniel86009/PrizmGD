@@ -168,3 +168,11 @@ canvas {
 .diffItem:hover {
     background-color: #f0f0f0;
 }
+
+/*Tiles Select*/
+.tileSelect {
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+}

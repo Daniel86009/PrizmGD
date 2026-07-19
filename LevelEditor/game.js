@@ -1,14 +1,16 @@
 const playerSprite = new Image();
 playerSprite.src = 'Sprites/GDIcon x24.png';
 
-const gravity = 1.98 * 1.5;
-let scrollSpeed = 5.8 * 1.5;
+const substeps = 4;
+
+const gravity = 1.98 * 1.5 * 4;
+let scrollSpeed = 5.8 * 1.5 * 4;
 let ground = tileSize * 19;
 
 let playerY = tileSize * 19;
 
 let yVelocity = 0;
-const jumpVel = -12.8 * 1.5;
+const jumpVel = -12.8 * 1.5 * 4;
 
 const playerSize = 24;
 
@@ -30,6 +32,9 @@ let lastFrameTime = performance.now();
 let playerRot = 0;
 let targetRot = 0;
 
+let ox = levelX;
+let oy = playerY;
+
 function AABB(ax, ay, aw, ah, bx, by, bw, bh) {
     return (
         ax < bx + bw &&
@@ -43,8 +48,8 @@ function collide() {
     let pWX = Math.floor(playerX + levelX);
     let pWY = Math.floor(playerY);
 
-    let oldPWX = pWX - Math.floor(scrollSpeed);
-    let oldPWY = rGrav ? Math.floor(pWY + yVelocity) : Math.floor(pWY - yVelocity);
+    let oldPWX = playerX + ox;//pWX - Math.floor(scrollSpeed);
+    let oldPWY = oy;//rGrav ? Math.floor(pWY + yVelocity) : Math.floor(pWY - yVelocity);
 
     let startCol = Math.floor(levelX / tileSize);
     if (startCol < 0) startCol = 0;
@@ -246,15 +251,15 @@ function checkJumpOrb() {
     return true;
 }
 
-function updatePlayer() {
+function updatePlayer(delta) {
     const currentTime = performance.now();
     const elapsedTime = currentTime - lastFrameTime;
-    if (elapsedTime < 1000 / targetFPS) {
+    if (elapsedTime * substeps < 1000 / targetFPS) {
         return;
     }
     lastFrameTime = currentTime - (elapsedTime % (1000 / targetFPS));
 
-    levelX += scrollSpeed;
+    levelX += scrollSpeed * delta;
 
     let spacePressed = false;
     for (let i = 0; i < pressedKeys.length; i++) {
@@ -271,8 +276,8 @@ function updatePlayer() {
     if (!spacePressed) hasJumped = false;
 
     yVelocity += gravity;
-    if (rGrav) playerY -= yVelocity;
-    else playerY += yVelocity;
+    if (rGrav) playerY -= yVelocity * delta;
+    else playerY += yVelocity * delta;
 
     isGrounded = false;
     for (let i = 0; i < canJumpOrb.length; i++) canJumpOrb[i] = false;
@@ -306,4 +311,6 @@ function updatePlayer() {
     }
 
     pIsGrounded = isGrounded;
+    ox = levelX;
+    oy = playerY;
 }

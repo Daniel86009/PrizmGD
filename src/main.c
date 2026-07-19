@@ -1,6 +1,7 @@
 #include <fxcg/display.h>
 #include <fxcg/keyboard.h>
-#include <stdio.h>
+#include <fxcg/rtc.h>
+#include <fxcg/misc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
@@ -66,6 +67,8 @@ int lastOrbI = -1;
 bool dead = false;
 
 bool rGrav = false;
+
+int fps = 0;
 
 //24 x 13
 
@@ -625,7 +628,7 @@ void loop() {
     }
   }
 
-  Bdisp_PutDisp_DD();
+  //Bdisp_PutDisp_DD();
 }
 
 int main() {
@@ -646,8 +649,21 @@ int main() {
     maxLevelY = levels[levelId].header.h * tileSize - ground;
   }
 
+  int startTime = RTC_GetTicks();
+
   while (1) {
     loop();
+
+    int currentTime = RTC_GetTicks();
+    int elapsed = currentTime - startTime;
+
+    int x = 0, y = 0;
+    char str[10];
+    itoa((int)(128.0f / (float)elapsed), (unsigned char*)str);
+    PrintMiniMini(&x, &y, str, 0b00000010, TEXT_COLOR_BLACK, 0);
+    Bdisp_PutDisp_DD();
+
+    startTime = currentTime;
   }
 
   return 0;
