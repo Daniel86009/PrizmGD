@@ -1,16 +1,14 @@
 const playerSprite = new Image();
 playerSprite.src = 'Sprites/GDIcon x24.png';
 
-const substeps = 4;
-
-const gravity = 1.98 * 1.5 * 4;
-let scrollSpeed = 5.8 * 1.5 * 4;
+const gravity = 1.98 * 1.5;//5;
+let scrollSpeed = 5.8 * 1.5;//12.4632;
 let ground = tileSize * 19;
 
 let playerY = tileSize * 19;
 
 let yVelocity = 0;
-const jumpVel = -12.8 * 1.5 * 4;
+const jumpVel = -12.8 * 1.5;//-22.5;
 
 const playerSize = 24;
 
@@ -34,6 +32,17 @@ let targetRot = 0;
 
 let ox = levelX;
 let oy = playerY;
+
+const substeps = 1;
+
+//10.386 tiles/s
+//94.04 units/s/s
+//20.37 units/s
+//Jump distance: 3.6 tiles
+//Jump duration: 0.45s
+
+let jumpStartTime, jumpDuration;
+let jumpDistance;
 
 function AABB(ax, ay, aw, ah, bx, by, bw, bh) {
     return (
@@ -251,37 +260,27 @@ function checkJumpOrb() {
     return true;
 }
 
-function updatePlayer(delta) {
+function updatePlayer() {
     const currentTime = performance.now();
     const elapsedTime = currentTime - lastFrameTime;
-    if (elapsedTime * substeps < 1000 / targetFPS) {
+    if (elapsedTime < 1000 / targetFPS) {
         return;
     }
     lastFrameTime = currentTime - (elapsedTime % (1000 / targetFPS));
-
-    levelX += scrollSpeed * delta;
 
     let spacePressed = false;
     for (let i = 0; i < pressedKeys.length; i++) {
         let key = pressedKeys[i];
         if (key == ' ') {
             spacePressed = true;
-            
-            if (checkJumpOrb() && isGrounded) {
-                yVelocity = jumpVel;
-                hasJumped = true;
-            }
         }
     }
     if (!spacePressed) hasJumped = false;
 
-    yVelocity += gravity;
-    if (rGrav) playerY -= yVelocity * delta;
-    else playerY += yVelocity * delta;
 
-    isGrounded = false;
-    for (let i = 0; i < canJumpOrb.length; i++) canJumpOrb[i] = false;
-    collide();
+    for (let i = 0; i < substeps; i++) {
+        physUpdate(spacePressed);
+    }
 
     if (isGrounded == false && pIsGrounded == false) {
         if (rGrav) targetRot -= 18;
@@ -300,17 +299,46 @@ function updatePlayer(delta) {
         playerRot += Math.sign(diff) * 18;
     }
 
-
     oldPlayerPos.push({x: levelX + playerX, y: playerY + (playerSize / 2)});
     
     if (playerY < -100) dead = true;
+
+    pIsGrounded = isGrounded;
+    
+}
+
+function physUpdate(spacePressed) {
+    levelX += scrollSpeed / substeps;
+
+    if (spacePressed && checkJumpOrb() && isGrounded) {
+        yVelocity = jumpVel;
+        hasJumped = true;
+        if (!jumpStartTime) jumpStartTime = performance.now(); //For testing
+    }
+
+    yVelocity += gravity / substeps;
+    if (rGrav) playerY -= yVelocity / substeps;
+    else playerY += yVelocity / substeps;
+
+    isGrounded = false;
+    for (let i = 0; i < canJumpOrb.length; i++) canJumpOrb[i] = false;
+    collide();
+
+    //For testing
+    if (isGrounded && jumpStartTime && !jumpDuration) {
+        jumpDuration = performance.now() - jumpStartTime;
+        jumpDistance = scrollSpeed * targetFPS * (jumpDuration / 1000) / tileSize;
+        console.log(jumpDuration, jumpDistance);
+        jumpStartTime = null;
+        jumpDuration = null;
+        jumpDistance = null;
+    }  
 
     if (dead) {
         stopTesting();
         return;
     }
 
-    pIsGrounded = isGrounded;
     ox = levelX;
     oy = playerY;
 }

@@ -548,7 +548,7 @@ function start() {
         levelX += event.deltaX;
         levelX += event.deltaY;
         if (levelX < 0) levelX = 0;
-        if (levelX > width * tileSize) levelX = width * tileSize;
+        //if (levelX > width * tileSize) levelX = width * tileSize;
     });
 
     window.addEventListener('beforeunload', (event) => {
@@ -633,7 +633,7 @@ function update() {
                     if (levelX < 0) levelX = 0;
                 } else if (key == 'ArrowRight') {
                     levelX += 24;
-                    if (levelX > width * tileSize) levelX = width * tileSize;
+                    //if (levelX > width * tileSize) levelX = width * tileSize;
                 }
             } else {
                 if (key == 'ArrowUp' && key != lastKey) {
@@ -658,9 +658,7 @@ function update() {
     if (view.showStartPos) drawStartPos();
 
     if (isTesting) {
-        for (let i = 0; i < substeps; i++) {
-            updatePlayer(1 / substeps);
-        }
+        updatePlayer();
 
         if (view.rotatePlayer) {
             ctx.translate(playerX + tileSize / 2, playerY + tileSize / 2);
@@ -684,7 +682,7 @@ function update() {
         ctx.beginPath();
         ctx.strokeStyle = '#37ff00';
         ctx.lineWidth = 1;
-        ctx.moveTo(playerX - levelX, ground);
+        ctx.moveTo(startPos.x * tileSize - levelX + playerX, startPos.y * tileSize);
         for (let i = 0; i < oldPlayerPos.length - 1; i++) {
             let pos = oldPlayerPos[i+1];
             ctx.lineTo(pos.x - levelX, pos.y);

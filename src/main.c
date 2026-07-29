@@ -70,6 +70,8 @@ bool rGrav = false;
 
 int fps = 0;
 
+int key;
+
 //24 x 13
 
 int sign(int val) {
@@ -130,23 +132,20 @@ void drawRotatedSprite(const unsigned char* data, int centerX, int centerY, int 
   }
 }
 
-void CopySpriteNbitMasked(const unsigned char* data, int x, int y, int width, int height, const color_t* palette, color_t maskColor, unsigned int bitwidth) {
+void CopySpriteNbit(const unsigned char* data, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
    color_t* VRAM = (color_t*) GetVRAMAddress();
    VRAM += (LCD_WIDTH_PX*y + x);
    int offset = 0;
    unsigned char buf;
-   for (int j=y; j<y+height; j++) {
+   for(int j=y; j<y+height; j++) {
       int availbits = 0;
-      for (int i=x; i<x+width;  i++) {
+      for(int i=x; i<x+width;  i++) {
          if (!availbits) {
             buf = data[offset++];
             availbits = 8;
          }
          color_t this = ((color_t)buf>>(8-bitwidth));
-         color_t color = palette[this];
-         if (color != maskColor) {
-            *VRAM = color;
-         }
+         *VRAM = palette[(color_t)this];
          VRAM++;
          buf<<=bitwidth;
          availbits-=bitwidth;
@@ -193,26 +192,31 @@ void reset() {
 }
 
 void mainMenu() {
-  if (keyDown(KEY_PRGM_RETURN) || keyDown(KEY_PRGM_SHIFT)) {
-    if (lastKey != KEY_PRGM_RETURN) {
+  if (key == KEY_CTRL_EXE || key == KEY_CTRL_SHIFT) {
+    if (lastKey != KEY_PRGM_RETURN && lastKey != KEY_PRGM_SHIFT) {
       onMenu = false;
       isPaused = false;
       reset();
       lastKey = keyDown(KEY_PRGM_RETURN) ? KEY_PRGM_RETURN : KEY_PRGM_SHIFT;
     }
-  } else if (keyDown(KEY_PRGM_LEFT) && lastKey != KEY_PRGM_LEFT) {
+  } else if (key == KEY_CTRL_LEFT && lastKey != KEY_PRGM_LEFT) {
     levelId = (levelId - 1 + levelCount) % levelCount;
+    maxLevelY = levels[levelId].header.h * tileSize - ground;
+    loadLevelLayout(levelId);
     lastKey = KEY_PRGM_LEFT;
-    maxLevelY = levels[levelId].header.h * tileSize - ground;
-    loadLevelLayout(levelId);
-  } else if (keyDown(KEY_PRGM_RIGHT) && lastKey != KEY_PRGM_RIGHT) {
+  } else if (key == KEY_CTRL_RIGHT && lastKey != KEY_PRGM_RIGHT) {
     levelId = (levelId + 1) % levelCount;
-    lastKey = KEY_PRGM_RIGHT;
     maxLevelY = levels[levelId].header.h * tileSize - ground;
     loadLevelLayout(levelId);
+    lastKey = KEY_PRGM_RIGHT;
   }
 
   Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
+
+  CopySpriteNbit(menuCorner, 0, LCD_HEIGHT_PX - 71, 72, 71, (color_t*)menuCorner_palette, 8);
+  drawRotatedSprite(menuCorner, LCD_WIDTH_PX - 35, LCD_HEIGHT_PX - 36, 72, 270.0f, (color_t*)menuCorner_palette);
+  const int xPos = LCD_WIDTH_PX / 2 - 307 / 2;
+  CopySpriteNbit(menuTopbar, xPos, 0, 307, 36, (color_t*)menuTopbar_palette, 8);
 
   if (levelCount == 0) {
     int x = 60, y = 99;
@@ -226,17 +230,20 @@ void mainMenu() {
   PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0);
   x = 192 - x / 2;
   PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
-  CopySpriteNbitMasked(difficulties[levels[levelId].header.diff].data, 177, 80, 30, 30, difficulties[levels[levelId].header.diff].palette, (color_t)0x2589, 8);
+  const int diff = levels[levelId].header.diff;
+  x = 30; y = 30;
+  if (diff == 5) {x = 34; y = 32;}
+  CopySpriteNbit(difficulties[diff].data, 177, 80, x, y, (color_t*)difficulties[diff].palette, 8);
 }
 
 void pauseMenu() {
-  if (keyDown(KEY_PRGM_UP) && lastKey != KEY_PRGM_UP) {
+  if (key == KEY_CTRL_UP && lastKey != KEY_PRGM_UP) {
     selection = (selection - 1 + 3) % 3;
     lastKey = KEY_PRGM_UP;
-  } else if (keyDown(KEY_PRGM_DOWN) && lastKey != KEY_PRGM_DOWN) {
+  } else if (key == KEY_CTRL_DOWN && lastKey != KEY_PRGM_DOWN) {
     selection = (selection + 1) % 3;
     lastKey = KEY_PRGM_DOWN;
-  } else if (keyDown(KEY_PRGM_RETURN) || keyDown(KEY_PRGM_SHIFT)) {
+  } else if (key == KEY_CTRL_EXE|| key == KEY_CTRL_SHIFT) {
     if (lastKey != KEY_PRGM_RETURN && lastKey != KEY_PRGM_SHIFT) {
       switch(selection) {
         case 0: isPaused = false; break;
@@ -527,7 +534,6 @@ bool checkJumpOrb() {
 
 void loop() {
   if (keyDown(KEY_PRGM_MENU)) {
-    int key;
     GetKey(&key);
   }
 
@@ -543,9 +549,9 @@ void loop() {
     }
   }
 
-  Bdisp_AllClr_VRAM();
-
   if (!isPaused) {
+    Bdisp_AllClr_VRAM();
+    
     levelX += scrollSpeed;
 
     if ((int)levelX >= (levels[levelId].header.w * tileSize) - LCD_WIDTH_PX) {
@@ -610,6 +616,8 @@ void loop() {
     }
 
     pIsGrounded = isGrounded;
+  } else {
+    GetKey(&key);
   }
 
   if (!onMenu) {
@@ -627,8 +635,6 @@ void loop() {
       pauseMenu();
     }
   }
-
-  //Bdisp_PutDisp_DD();
 }
 
 int main() {
