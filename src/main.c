@@ -88,7 +88,7 @@ int keyDown(int basic_keycode) {
 	return (0 != (keyboard_register[word] & 1<<bit));
 }
 
-void fillArea(unsigned x,unsigned y,unsigned w,unsigned h,unsigned short col){
+void fillArea(unsigned x,unsigned y,unsigned w,unsigned h,color_t col){
     unsigned short*s=(unsigned short*)GetVRAMAddress();
     s+=(y*384)+x;
     while(h--){
@@ -154,6 +154,26 @@ void CopySpriteNbit(const unsigned char* data, int x, int y, int width, int heig
    }
 }
 
+void CopySpriteNbitReflected(const unsigned char* data, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
+   color_t* VRAM = (color_t*) GetVRAMAddress();
+   int offset = 0;
+   unsigned char buf;
+   for(int j = 0; j < height; j++) {
+      color_t *tempVRAM = VRAM + (y + j) * LCD_WIDTH_PX + (x + width - 1);
+      int availbits = 0;
+      for(int i = 0; i < width; i++) {
+         if (!availbits) {
+            buf = data[offset++];
+            availbits = 8;
+         }
+         color_t this = ((color_t)buf>>(8-bitwidth));
+         *tempVRAM-- = palette[(color_t)this];
+         buf<<=bitwidth;
+         availbits-=bitwidth;
+      }
+   }
+}
+
 void CopyTilesheetSprite(const unsigned char* data, int sx, int sy, int sWidth, int x, int y, int width, int height, color_t* palette) {
   if (x + width <= 0 || x >= LCD_WIDTH_PX || y + height <= 0 || y >= LCD_HEIGHT_PX) return;
   if (x < 0) {sx -= x; width += x; x = 0;}
@@ -213,10 +233,19 @@ void mainMenu() {
 
   Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
 
+  //Corners
   CopySpriteNbit(menuCorner, 0, LCD_HEIGHT_PX - 71, 72, 71, (color_t*)menuCorner_palette, 8);
-  drawRotatedSprite(menuCorner, LCD_WIDTH_PX - 35, LCD_HEIGHT_PX - 36, 72, 270.0f, (color_t*)menuCorner_palette);
-  const int xPos = LCD_WIDTH_PX / 2 - 307 / 2;
-  CopySpriteNbit(menuTopbar, xPos, 0, 307, 36, (color_t*)menuTopbar_palette, 8);
+  CopySpriteNbitReflected(menuCorner, LCD_WIDTH_PX - 72, LCD_HEIGHT_PX - 71, 72, 71, (color_t*)menuCorner_palette, 8);
+  //Topbar
+  int xPos = LCD_WIDTH_PX / 2 - 307 / 2;
+  int yPos = 0;
+  CopySpriteNbit(menuTopbar, xPos, yPos, 307, 36, (color_t*)menuTopbar_palette, 8);
+  //Arrows
+  xPos = LCD_WIDTH_PX - 27 - 10;
+  yPos = LCD_HEIGHT_PX / 2 - 66 / 2;
+  CopySpriteNbit(menuArrow, xPos, yPos, 27, 66, (color_t*)menuArrow_palette, 8);
+  xPos = 10;
+  CopySpriteNbitReflected(menuArrow, xPos, yPos, 27, 66, (color_t*)menuArrow_palette, 8);
 
   if (levelCount == 0) {
     int x = 60, y = 99;
