@@ -42,6 +42,7 @@ const bool drawHitboxes = false;
 //Menu
 bool onMenu = true;
 bool isPaused = true;
+bool skipInterrupt = true;
 int lastKey = -1;
 int selection = 0;
 
@@ -73,6 +74,22 @@ int fps = 0;
 int key;
 
 //24 x 13
+
+char *cStrcat(char *dest, const char *src) {
+  char *ptr = dest;
+
+  while (*ptr != '\0') ptr++;
+
+  while (*src != '\0') {
+    *ptr = *src;
+    ptr++;
+    src++;
+  }
+
+  *ptr = '\0';
+
+  return dest;
+}
 
 int sign(int val) {
   return (val > 0) - (val < 0);
@@ -213,22 +230,18 @@ void reset() {
 
 void mainMenu() {
   if (key == KEY_CTRL_EXE || key == KEY_CTRL_SHIFT) {
-    if (lastKey != KEY_PRGM_RETURN && lastKey != KEY_PRGM_SHIFT) {
-      onMenu = false;
-      isPaused = false;
-      reset();
-      lastKey = keyDown(KEY_PRGM_RETURN) ? KEY_PRGM_RETURN : KEY_PRGM_SHIFT;
-    }
-  } else if (key == KEY_CTRL_LEFT && lastKey != KEY_PRGM_LEFT) {
+    onMenu = false;
+    isPaused = false;
+    skipInterrupt = true;
+    reset();
+  } else if (key == KEY_CTRL_LEFT) {
     levelId = (levelId - 1 + levelCount) % levelCount;
     maxLevelY = levels[levelId].header.h * tileSize - ground;
     loadLevelLayout(levelId);
-    lastKey = KEY_PRGM_LEFT;
-  } else if (key == KEY_CTRL_RIGHT && lastKey != KEY_PRGM_RIGHT) {
+  } else if (key == KEY_CTRL_RIGHT) {
     levelId = (levelId + 1) % levelCount;
     maxLevelY = levels[levelId].header.h * tileSize - ground;
     loadLevelLayout(levelId);
-    lastKey = KEY_PRGM_RIGHT;
   }
 
   Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
@@ -266,22 +279,23 @@ void mainMenu() {
 }
 
 void pauseMenu() {
-  if (key == KEY_CTRL_UP && lastKey != KEY_PRGM_UP) {
+  if (key == KEY_CTRL_UP) {
     selection = (selection - 1 + 3) % 3;
-    lastKey = KEY_PRGM_UP;
-  } else if (key == KEY_CTRL_DOWN && lastKey != KEY_PRGM_DOWN) {
+  } else if (key == KEY_CTRL_DOWN) {
     selection = (selection + 1) % 3;
-    lastKey = KEY_PRGM_DOWN;
   } else if (key == KEY_CTRL_EXE|| key == KEY_CTRL_SHIFT) {
-    if (lastKey != KEY_PRGM_RETURN && lastKey != KEY_PRGM_SHIFT) {
-      switch(selection) {
-        case 0: isPaused = false; break;
-        case 1: isPaused = false; dead = true; break;
-        case 2: onMenu = true; break;
-      }
-
-      lastKey = keyDown(KEY_PRGM_RETURN) ? KEY_PRGM_RETURN : KEY_PRGM_SHIFT;
+    switch(selection) {
+      case 0: isPaused = false; break;
+      case 1: isPaused = false; dead = true; break;
+      case 2: onMenu = true; break;
     }
+    skipInterrupt = true;
+    key = -1;
+  } else if (key == KEY_CTRL_EXIT) {
+    isPaused = false;
+    skipInterrupt = true;
+    key = -1;
+    lastKey = KEY_PRGM_EXIT;
   }
 
   color_t c[3] = {0x5dc3, 0x5dc3, 0x5dc3};
@@ -570,14 +584,6 @@ void loop() {
     lastKey = -1;
   }
 
-  if (keyDown(KEY_PRGM_EXIT) && !onMenu) {
-    if (lastKey != KEY_PRGM_EXIT) {
-      selection = 0;
-      isPaused = !isPaused;
-      lastKey = KEY_PRGM_EXIT;
-    }
-  }
-
   if (!isPaused) {
     Bdisp_AllClr_VRAM();
     
@@ -645,8 +651,6 @@ void loop() {
     }
 
     pIsGrounded = isGrounded;
-  } else {
-    GetKey(&key);
   }
 
   if (!onMenu) {
@@ -663,11 +667,23 @@ void loop() {
     } else {
       pauseMenu();
     }
+    if (skipInterrupt) skipInterrupt = false;
+    else GetKey(&key);
+  }
+
+  if (keyDown(KEY_PRGM_EXIT) && !onMenu && !isPaused && !skipInterrupt) {
+    if (lastKey != KEY_PRGM_EXIT) {
+      key = -1;
+      selection = 0;
+      isPaused = true;
+      skipInterrupt = true;
+      lastKey = KEY_PRGM_EXIT;
+    }
   }
 }
 
 int main() {
-  // Clear VRAM
+  //Clear VRAM
   Bdisp_AllClr_VRAM();
   //Enable colours
   Bdisp_EnableColor(1);
@@ -689,13 +705,16 @@ int main() {
   while (1) {
     loop();
 
+    //Print fps
     int currentTime = RTC_GetTicks();
     int elapsed = currentTime - startTime;
 
     int x = 0, y = 0;
-    char str[10];
-    itoa((int)(128.0f / (float)elapsed), (unsigned char*)str);
-    PrintMiniMini(&x, &y, str, 0b00000010, TEXT_COLOR_BLACK, 0);
+    char fpsStr[10];
+    char printStr[10] = "FPS: ";
+    itoa((int)(128.0f / (float)elapsed), (unsigned char*)fpsStr);
+    cStrcat(printStr, fpsStr);
+    PrintMiniMini(&x, &y, printStr, 0b00000010, TEXT_COLOR_BLACK, 0);
     Bdisp_PutDisp_DD();
 
     startTime = currentTime;

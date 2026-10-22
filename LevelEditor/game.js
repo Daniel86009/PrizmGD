@@ -2,13 +2,16 @@ const playerSprite = new Image();
 playerSprite.src = 'Sprites/GDIcon x24.png';
 
 const gravity = 1.98 * 1.5;//5;
+//const gravity = 94.040816 / tileSize * 20;
 let scrollSpeed = 5.8 * 1.5;//12.4632;
+//let scrollSpeed = 10.386 / tileSize * 20;
 let ground = tileSize * 19;
 
 let playerY = tileSize * 19;
 
 let yVelocity = 0;
 const jumpVel = -12.8 * 1.5;//-22.5;
+//const jumpVel = -20.375510;
 
 const playerSize = 24;
 

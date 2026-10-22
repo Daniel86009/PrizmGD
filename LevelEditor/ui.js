@@ -22,3 +22,22 @@ function populateTileSelect() {
         tileSelect.appendChild(elem);
     }
 }
+
+function createPopup(text) {
+    const popupCont = document.querySelector(".popupCont");
+    let div = document.createElement('div');
+
+    div.classList.add("popup");
+    div.innerHTML = `<p>${text}</p>`;
+
+    popupCont.appendChild(div);
+
+    div.offsetHeight;
+
+    setTimeout(() => {
+        div.classList.add("fading");
+        setTimeout(() => {
+            div.remove();
+        }, 3000);
+    }, 5000); 
+}

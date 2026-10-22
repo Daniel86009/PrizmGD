@@ -26,7 +26,7 @@ BUILD		:=	build
 SOURCES		:=	src
 DATA		:=	data  
 INCLUDES	:=
-
+EXPORT_NAME := PrizmGD
 #---------------------------------------------------------------------------------
 # options for code and add-in generation
 #---------------------------------------------------------------------------------
@@ -102,7 +102,8 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES), -iquote $(CURDIR)/$(dir)) \
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib) \
 					-L$(LIBFXCG_LIB)
 
-export OUTPUT	:=	$(CURDIR)/$(TARGET)
+# export OUTPUT	:=	$(CURDIR)/$(TARGET)
+export OUTPUT := $(CURDIR)/$(EXPORT_NAME)
 .PHONY: all clean
 
 #---------------------------------------------------------------------------------

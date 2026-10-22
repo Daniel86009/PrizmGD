@@ -41,6 +41,7 @@ let startPos = {x: 0, y: 19};
 
 let playerX = tileSize * 6;
 let t = 0;
+let diff = 0;
 
 function drawTile(id, x, y) {
     const newTileID = id - 1;
@@ -192,7 +193,7 @@ function loadLevelFromBuffer(buffer) {
 
     const ule = false; // Use big endian
 
-    const diff = view.getInt32(32, ule);
+    const nDiff = view.getInt32(32, ule);
     const w = view.getInt32(36, ule);
     const h = view.getInt32(40, ule);
 
@@ -213,7 +214,7 @@ function loadLevelFromBuffer(buffer) {
     unsavedChanges = false;
     selection.tiles = [];
 
-    updateDiff(diff);
+    updateDiff(nDiff);
 
     changeSize();
     updateLevelInfo();
@@ -232,6 +233,8 @@ async function saveLevel() {
     await writable.write(buffer);
     await writable.close();
     unsavedChanges = false;
+
+    createPopup("Level Saved");
 }
 
 async function saveLevelAs() {
