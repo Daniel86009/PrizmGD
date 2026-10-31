@@ -1,32 +1,30 @@
 #include <fxcg/display.h>
 #include <fxcg/keyboard.h>
-#include <fxcg/rtc.h>
 #include <fxcg/misc.h>
+#include <fxcg/rtc.h>
+#include <math.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <math.h>
 
-#include "sprites.h"
-#include "load.h"
 #include "collisions.h"
+#include "load.h"
+#include "sprites.h"
 
 const float sinEst[36] = {
-    0.00f,  0.17f,  0.34f,  0.50f,  0.64f,  0.77f,  0.87f,  0.94f,  0.98f,  1.00f,
-    0.98f,  0.94f,  0.87f,  0.77f,  0.64f,  0.50f,  0.34f,  0.17f,  0.00f, -0.17f,
-   -0.34f, -0.50f, -0.64f, -0.77f, -0.87f, -0.94f, -0.98f, -1.00f, -0.98f, -0.94f,
-   -0.87f, -0.77f, -0.64f, -0.50f, -0.34f, -0.17f
-};
+    0.00f,  0.17f,  0.34f,  0.50f,  0.64f,  0.77f,  0.87f,  0.94f,  0.98f,
+    1.00f,  0.98f,  0.94f,  0.87f,  0.77f,  0.64f,  0.50f,  0.34f,  0.17f,
+    0.00f,  -0.17f, -0.34f, -0.50f, -0.64f, -0.77f, -0.87f, -0.94f, -0.98f,
+    -1.00f, -0.98f, -0.94f, -0.87f, -0.77f, -0.64f, -0.50f, -0.34f, -0.17f};
 const float cosEst[36] = {
-    1.00f,  0.98f,  0.94f,  0.87f,  0.77f,  0.64f,  0.50f,  0.34f,  0.17f,  0.00f,
-   -0.17f, -0.34f, -0.50f, -0.64f, -0.77f, -0.87f, -0.94f, -0.98f, -1.00f, -0.98f,
-   -0.94f, -0.87f, -0.77f, -0.64f, -0.50f, -0.34f, -0.17f,  0.00f,  0.17f,  0.34f,
-    0.50f,  0.64f,  0.77f,  0.87f,  0.94f,  0.98f
-};
+    1.00f,  0.98f,  0.94f,  0.87f,  0.77f,  0.64f,  0.50f,  0.34f,  0.17f,
+    0.00f,  -0.17f, -0.34f, -0.50f, -0.64f, -0.77f, -0.87f, -0.94f, -0.98f,
+    -1.00f, -0.98f, -0.94f, -0.87f, -0.77f, -0.64f, -0.50f, -0.34f, -0.17f,
+    0.00f,  0.17f,  0.34f,  0.50f,  0.64f,  0.77f,  0.87f,  0.94f,  0.98f};
 
-//Map
+// Map
 const int tileSize = 24;
-const float gravity = 1.98f * 1.5f;
+const float gravity = 94.04f * tileSize;
 const int ground = 192;
 
 int levelId = 0;
@@ -35,23 +33,27 @@ float levelX = 0.0f;
 float maxLevelY = 0.0f;
 float levelY = 0.0f;
 
-float scrollSpeed = 5.8f * 1.5f;
+float scrollSpeed = 10.386f * tileSize;
 
 const bool drawHitboxes = false;
 
-//Menu
+// Menu
 bool onMenu = true;
 bool isPaused = true;
 bool skipInterrupt = true;
 int lastKey = -1;
 int selection = 0;
 
-//Player
+// Player
 float playerX = 140.0f;
 float playerY = 167.0f;
 
+float oPlayerX = 140.0f;
+float oPlayerY = 167.0f;
+
 float yVelocity = 0.0f;
-const float jumpVel = -12.8f * 1.5f;
+const float jumpVel = -19.8f * tileSize;
+const float terminalVel = 26.28f * tileSize;
 
 float playerRot = 0.0f;
 float targetRot = 0.0f;
@@ -69,16 +71,19 @@ bool dead = false;
 
 bool rGrav = false;
 
+// Game
 int fps = 0;
+float gameSpeed = 0.8;
 
 int key;
 
-//24 x 13
+// 24 x 13
 
 char *cStrcat(char *dest, const char *src) {
   char *ptr = dest;
 
-  while (*ptr != '\0') ptr++;
+  while (*ptr != '\0')
+    ptr++;
 
   while (*src != '\0') {
     *ptr = *src;
@@ -91,33 +96,32 @@ char *cStrcat(char *dest, const char *src) {
   return dest;
 }
 
-int sign(int val) {
-  return (val > 0) - (val < 0);
-}
+int sign(int val) { return (val > 0) - (val < 0); }
 
 int keyDown(int basic_keycode) {
-	const unsigned short* keyboard_register = (unsigned short*)0xA44B0000;
-	int row, col, word, bit;
-	row = basic_keycode%10;
-	col = basic_keycode/10-1;
-	word = row>>1;
-	bit = col + ((row&1)<<3);
-	return (0 != (keyboard_register[word] & 1<<bit));
+  const unsigned short *keyboard_register = (unsigned short *)0xA44B0000;
+  int row, col, word, bit;
+  row = basic_keycode % 10;
+  col = basic_keycode / 10 - 1;
+  word = row >> 1;
+  bit = col + ((row & 1) << 3);
+  return (0 != (keyboard_register[word] & 1 << bit));
 }
 
-void fillArea(unsigned x,unsigned y,unsigned w,unsigned h,color_t col){
-    unsigned short*s=(unsigned short*)GetVRAMAddress();
-    s+=(y*384)+x;
-    while(h--){
-        unsigned w2=w;
-        while(w2--)
-            *s++=col;
-        s+=384-w;
-    }
+void fillArea(unsigned x, unsigned y, unsigned w, unsigned h, color_t col) {
+  unsigned short *s = (unsigned short *)GetVRAMAddress();
+  s += (y * 384) + x;
+  while (h--) {
+    unsigned w2 = w;
+    while (w2--)
+      *s++ = col;
+    s += 384 - w;
+  }
 }
 
-void drawRotatedSprite(const unsigned char* data, int centerX, int centerY, int size, float angle, color_t* palette) {
-  color_t* VRAM = (color_t*)GetVRAMAddress();
+void drawRotatedSprite(const unsigned char *data, int centerX, int centerY,
+                       int size, float angle, color_t *palette) {
+  color_t *VRAM = (color_t *)GetVRAMAddress();
 
   float cosA = cosEst[(int)angle / 10];
   float sinA = sinEst[(int)angle / 10];
@@ -138,7 +142,8 @@ void drawRotatedSprite(const unsigned char* data, int centerX, int centerY, int 
         int screenX = centerX + dx;
         int screenY = centerY + dy;
 
-        if (screenX >= 0 && screenX < LCD_WIDTH_PX && screenY >= 0 && screenY < LCD_HEIGHT_PX) {
+        if (screenX >= 0 && screenX < LCD_WIDTH_PX && screenY >= 0 &&
+            screenY < LCD_HEIGHT_PX) {
           int srcX = (int)tx;
           int srcY = (int)ty;
           int spriteIndex = srcY * size + srcX;
@@ -149,61 +154,79 @@ void drawRotatedSprite(const unsigned char* data, int centerX, int centerY, int 
   }
 }
 
-void CopySpriteNbit(const unsigned char* data, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
-   color_t* VRAM = (color_t*) GetVRAMAddress();
-   VRAM += (LCD_WIDTH_PX*y + x);
-   int offset = 0;
-   unsigned char buf;
-   for(int j=y; j<y+height; j++) {
-      int availbits = 0;
-      for(int i=x; i<x+width;  i++) {
-         if (!availbits) {
-            buf = data[offset++];
-            availbits = 8;
-         }
-         color_t this = ((color_t)buf>>(8-bitwidth));
-         *VRAM = palette[(color_t)this];
-         VRAM++;
-         buf<<=bitwidth;
-         availbits-=bitwidth;
+void CopySpriteNbit(const unsigned char *data, int x, int y, int width,
+                    int height, color_t *palette, unsigned int bitwidth) {
+  color_t *VRAM = (color_t *)GetVRAMAddress();
+  VRAM += (LCD_WIDTH_PX * y + x);
+  int offset = 0;
+  unsigned char buf;
+  for (int j = y; j < y + height; j++) {
+    int availbits = 0;
+    for (int i = x; i < x + width; i++) {
+      if (!availbits) {
+        buf = data[offset++];
+        availbits = 8;
       }
-      VRAM += (LCD_WIDTH_PX-width);
-   }
+      color_t this = ((color_t)buf >> (8 - bitwidth));
+      *VRAM = palette[(color_t)this];
+      VRAM++;
+      buf <<= bitwidth;
+      availbits -= bitwidth;
+    }
+    VRAM += (LCD_WIDTH_PX - width);
+  }
 }
 
-void CopySpriteNbitReflected(const unsigned char* data, int x, int y, int width, int height, color_t* palette, unsigned int bitwidth) {
-   color_t* VRAM = (color_t*) GetVRAMAddress();
-   int offset = 0;
-   unsigned char buf;
-   for(int j = 0; j < height; j++) {
-      color_t *tempVRAM = VRAM + (y + j) * LCD_WIDTH_PX + (x + width - 1);
-      int availbits = 0;
-      for(int i = 0; i < width; i++) {
-         if (!availbits) {
-            buf = data[offset++];
-            availbits = 8;
-         }
-         color_t this = ((color_t)buf>>(8-bitwidth));
-         *tempVRAM-- = palette[(color_t)this];
-         buf<<=bitwidth;
-         availbits-=bitwidth;
+void CopySpriteNbitReflected(const unsigned char *data, int x, int y, int width,
+                             int height, color_t *palette,
+                             unsigned int bitwidth) {
+  color_t *VRAM = (color_t *)GetVRAMAddress();
+  int offset = 0;
+  unsigned char buf;
+  for (int j = 0; j < height; j++) {
+    color_t *tempVRAM = VRAM + (y + j) * LCD_WIDTH_PX + (x + width - 1);
+    int availbits = 0;
+    for (int i = 0; i < width; i++) {
+      if (!availbits) {
+        buf = data[offset++];
+        availbits = 8;
       }
-   }
+      color_t this = ((color_t)buf >> (8 - bitwidth));
+      *tempVRAM-- = palette[(color_t)this];
+      buf <<= bitwidth;
+      availbits -= bitwidth;
+    }
+  }
 }
 
-void CopyTilesheetSprite(const unsigned char* data, int sx, int sy, int sWidth, int x, int y, int width, int height, color_t* palette) {
-  if (x + width <= 0 || x >= LCD_WIDTH_PX || y + height <= 0 || y >= LCD_HEIGHT_PX) return;
-  if (x < 0) {sx -= x; width += x; x = 0;}
-  if (y < 0) {sy -= y; height += y; y = 0;}
-  if (x + width > LCD_WIDTH_PX) width = LCD_WIDTH_PX - x;
-  if (y + height > LCD_HEIGHT_PX) height = LCD_HEIGHT_PX - y;
+void CopyTilesheetSprite(const unsigned char *data, int sx, int sy, int sWidth,
+                         int x, int y, int width, int height,
+                         color_t *palette) {
+  if (x + width <= 0 || x >= LCD_WIDTH_PX || y + height <= 0 ||
+      y >= LCD_HEIGHT_PX)
+    return;
+  if (x < 0) {
+    sx -= x;
+    width += x;
+    x = 0;
+  }
+  if (y < 0) {
+    sy -= y;
+    height += y;
+    y = 0;
+  }
+  if (x + width > LCD_WIDTH_PX)
+    width = LCD_WIDTH_PX - x;
+  if (y + height > LCD_HEIGHT_PX)
+    height = LCD_HEIGHT_PX - y;
 
-  if (width <= 0 || height <= 0) return;
+  if (width <= 0 || height <= 0)
+    return;
 
-  color_t* VRAM = (color_t*)GetVRAMAddress();
-  color_t* dRowPtr = VRAM + (y * LCD_WIDTH_PX) + x;
+  color_t *VRAM = (color_t *)GetVRAMAddress();
+  color_t *dRowPtr = VRAM + (y * LCD_WIDTH_PX) + x;
 
-  const unsigned char* sRowPtr = data + (sy * sWidth) + sx;
+  const unsigned char *sRowPtr = data + (sy * sWidth) + sx;
 
   for (int j = 0; j < height; j++) {
     for (int i = 0; i < width; i++) {
@@ -246,36 +269,50 @@ void mainMenu() {
 
   Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
 
-  //Corners
-  CopySpriteNbit(menuCorner, 0, LCD_HEIGHT_PX - 71, 72, 71, (color_t*)menuCorner_palette, 8);
-  CopySpriteNbitReflected(menuCorner, LCD_WIDTH_PX - 72, LCD_HEIGHT_PX - 71, 72, 71, (color_t*)menuCorner_palette, 8);
-  //Topbar
+  // Corners
+  CopySpriteNbit(menuCorner, 0, LCD_HEIGHT_PX - 71, 72, 71,
+                 (color_t *)menuCorner_palette, 8);
+  CopySpriteNbitReflected(menuCorner, LCD_WIDTH_PX - 72, LCD_HEIGHT_PX - 71, 72,
+                          71, (color_t *)menuCorner_palette, 8);
+  // Topbar
   int xPos = LCD_WIDTH_PX / 2 - 307 / 2;
   int yPos = 0;
-  CopySpriteNbit(menuTopbar, xPos, yPos, 307, 36, (color_t*)menuTopbar_palette, 8);
-  //Arrows
+  CopySpriteNbit(menuTopbar, xPos, yPos, 307, 36, (color_t *)menuTopbar_palette,
+                 8);
+  // Arrows
   xPos = LCD_WIDTH_PX - 27 - 10;
   yPos = LCD_HEIGHT_PX / 2 - 66 / 2;
-  CopySpriteNbit(menuArrow, xPos, yPos, 27, 66, (color_t*)menuArrow_palette, 8);
+  CopySpriteNbit(menuArrow, xPos, yPos, 27, 66, (color_t *)menuArrow_palette,
+                 8);
   xPos = 10;
-  CopySpriteNbitReflected(menuArrow, xPos, yPos, 27, 66, (color_t*)menuArrow_palette, 8);
+  CopySpriteNbitReflected(menuArrow, xPos, yPos, 27, 66,
+                          (color_t *)menuArrow_palette, 8);
 
   if (levelCount == 0) {
     int x = 60, y = 99;
     PrintMini(&x, &y, "No levels found in", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
-    x = 60; y = 115;
-    PrintMini(&x, &y, "\\\\fls0\\GDLEVELS\\", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
+    x = 60;
+    y = 115;
+    PrintMini(&x, &y, "\\\\fls0\\GDLEVELS\\", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1,
+              0);
     return;
   }
 
   int x = 0, y = 99;
-  PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0);
+  PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0,
+            0, 0);
   x = 192 - x / 2;
-  PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
+  PrintMini(&x, &y, levels[levelId].header.name, 0x02, 0xFFFFFFFF, 0, 0, 0, 0,
+            1, 0);
   const int diff = levels[levelId].header.diff;
-  x = 30; y = 30;
-  if (diff == 5) {x = 34; y = 32;}
-  CopySpriteNbit(difficulties[diff].data, 177, 80, x, y, (color_t*)difficulties[diff].palette, 8);
+  x = 30;
+  y = 30;
+  if (diff == 5) {
+    x = 34;
+    y = 32;
+  }
+  CopySpriteNbit(difficulties[diff].data, 177, 80, x, y,
+                 (color_t *)difficulties[diff].palette, 8);
 }
 
 void pauseMenu() {
@@ -283,11 +320,18 @@ void pauseMenu() {
     selection = (selection - 1 + 3) % 3;
   } else if (key == KEY_CTRL_DOWN) {
     selection = (selection + 1) % 3;
-  } else if (key == KEY_CTRL_EXE|| key == KEY_CTRL_SHIFT) {
-    switch(selection) {
-      case 0: isPaused = false; break;
-      case 1: isPaused = false; dead = true; break;
-      case 2: onMenu = true; break;
+  } else if (key == KEY_CTRL_EXE || key == KEY_CTRL_SHIFT) {
+    switch (selection) {
+    case 0:
+      isPaused = false;
+      break;
+    case 1:
+      isPaused = false;
+      dead = true;
+      break;
+    case 2:
+      onMenu = true;
+      break;
     }
     skipInterrupt = true;
     key = -1;
@@ -304,23 +348,25 @@ void pauseMenu() {
 
   fillArea(48, 27, 288, 162, (color_t)0x0844);
 
-  //Resume
+  // Resume
   fillArea(48 + 5, 27 + 5, 278, 47, c[0]);
   int x = 0, y = 23;
   PrintMini(&x, &y, "Resume", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0);
   x = 53 + (278 / 2) - (x * 0.5);
   PrintMini(&x, &y, "Resume", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
 
-  //Restart
+  // Restart
   fillArea(48 + 5, 27 + 47 + 10, 278, 47, c[1]);
-  x = 0; y = 75;
+  x = 0;
+  y = 75;
   PrintMini(&x, &y, "Restart", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0);
   x = 53 + (278 / 2) - (x * 0.5);
   PrintMini(&x, &y, "Restart", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
 
-  //Main Menu
+  // Main Menu
   fillArea(48 + 5, 27 + 94 + 15, 278, 47, c[2]);
-  x = 0; y = 127;
+  x = 0;
+  y = 127;
   PrintMini(&x, &y, "Main Menu", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 0, 0);
   x = 53 + (278 / 2) - (x * 0.5);
   PrintMini(&x, &y, "Main Menu", 0x02, 0xFFFFFFFF, 0, 0, 0, 0, 1, 0);
@@ -330,7 +376,8 @@ void drawMap(int xOffset, int yOffset) {
   int startCol = xOffset / tileSize;
   int endCol = startCol + 17;
 
-  if (endCol > levels[levelId].header.w) endCol = levels[levelId].header.w;
+  if (endCol > levels[levelId].header.w)
+    endCol = levels[levelId].header.w;
 
   for (int x = startCol; x < endCol; x++) {
     for (int y = 0; y < levels[levelId].header.h; y++) {
@@ -343,16 +390,20 @@ void drawMap(int xOffset, int yOffset) {
         int sx = (type % 10) * tileSize;
         int sy = (type / 10) * tileSize;
 
-        CopyTilesheetSprite(tilesheet, sx, sy, 240, nx, ny, tileSize, tileSize, (color_t*)tilesheet_palette);
+        CopyTilesheetSprite(tilesheet, sx, sy, 240, nx, ny, tileSize, tileSize,
+                            (color_t *)tilesheet_palette);
 
-        //Draw hitboxes
+        // Draw hitboxes
         if (drawHitboxes) {
           int hitX = nx + collisions[type].x;
           int hitY = ny + collisions[type].y;
           if (collisions[type].collisionType == 1) {
-            Bdisp_Rectangle(hitX, hitY - 24, hitX + collisions[type].width, hitY + collisions[type].height - 24, 4);
-          } else if (collisions[type].collisionType == 2 || collisions[type].collisionType == 3) {
-            Bdisp_Rectangle(hitX, hitY - 24, hitX + collisions[type].width, hitY + collisions[type].height - 24, 1);
+            Bdisp_Rectangle(hitX, hitY - 24, hitX + collisions[type].width,
+                            hitY + collisions[type].height - 24, 4);
+          } else if (collisions[type].collisionType == 2 ||
+                     collisions[type].collisionType == 3) {
+            Bdisp_Rectangle(hitX, hitY - 24, hitX + collisions[type].width,
+                            hitY + collisions[type].height - 24, 1);
           }
         }
       }
@@ -361,26 +412,79 @@ void drawMap(int xOffset, int yOffset) {
 }
 
 bool AABB(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
-  return (
-    ax < bx + bw &&
-    ax + aw > bx &&
-    ay < by + bh &&
-    ay + ah > by
-  );
+  return (ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by);
+}
+
+void wallCollide(CollisionShape shape, int pWY, int oldPWX, int oldPWY,
+                 int tileWX, int tileWY) {
+  const float hitboxSize = playerSize * 0.3;
+  const float hitboxOffset = (playerSize - hitboxSize) / 2;
+
+  const float hitboxX = oldPWX + hitboxOffset;
+  const float hitboxY = oldPWY + hitboxOffset;
+
+  if (rGrav) {
+    // Reversed gravity
+    if (yVelocity >= 0.0f &&
+        (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
+      playerY = (float)(tileWY + playerSize) - levelY;
+      yVelocity = 0.0f;
+      isGrounded = true;
+    } else if (yVelocity < 0.0f &&
+               (hitboxY + (hitboxSize - hitboxSize / 4)) <= tileWY) {
+      playerY = (float)(tileWY - playerSize) - levelY;
+      yVelocity = 0.2f;
+    } else {
+      const bool overlapsX =
+          hitboxX + hitboxSize > tileWX && hitboxX < tileWX + shape.width;
+      const bool overlapsY =
+          hitboxY + hitboxSize > tileWY && hitboxY < tileWY + shape.height;
+
+      if (overlapsX && overlapsY) {
+        dead = true;
+        return;
+      }
+    }
+  } else {
+    // Normal gravity
+    if (yVelocity >= 0.0f &&
+        (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
+      playerY = (float)(tileWY - playerSize) - levelY;
+      yVelocity = 0.0f;
+      isGrounded = true;
+    } else if (yVelocity <= 0.0f &&
+               (hitboxY + hitboxSize / 4) >= (tileWY + shape.height)) {
+      playerY = (float)(tileWY + shape.height) - levelY;
+      yVelocity = 0.2f;
+    } else {
+      const bool overlapsX =
+          hitboxX + hitboxSize > tileWX && hitboxX < tileWX + shape.width;
+      const bool overlapsY =
+          hitboxY + hitboxSize > tileWY && hitboxY < tileWY + shape.height;
+
+      if (overlapsX && overlapsY) {
+        dead = true;
+        return;
+      }
+    }
+  }
 }
 
 void collide() {
   int pWX = (int)playerX + (int)levelX;
   int pWY = (int)playerY + (int)levelY;
 
-  int oldPWX = pWX - scrollSpeed;
-  int oldPWY = rGrav ? (int)(pWY + yVelocity) : (int)(pWY - yVelocity);
+  int oldPWX = (int)oPlayerX;
+  int oldPWY = (int)oPlayerY;
+  // int oldPWY = rGrav ? (int)(pWY + yVelocity) : (int)(pWY - yVelocity);
 
   int startCol = (int)levelX / tileSize;
-  if (startCol < 0) startCol = 0;
-  
-  int endCol = startCol + 17; 
-  if (endCol > levels[levelId].header.w) endCol = levels[levelId].header.w;
+  if (startCol < 0)
+    startCol = 0;
+
+  int endCol = startCol + 17;
+  if (endCol > levels[levelId].header.w)
+    endCol = levels[levelId].header.w;
 
   bool jumpPad = false;
 
@@ -389,139 +493,125 @@ void collide() {
       int mapIndex = y * levels[levelId].header.w + x;
       int tileID = curLayout[mapIndex];
 
-      if (tileID <= 0) continue;
+      if (tileID <= 0)
+        continue;
 
       CollisionShape shape = collisions[tileID - 1];
-      if (shape.collisionType == 0) continue;
+      if (shape.collisionType == 0)
+        continue;
 
       int tileWX = x * tileSize + shape.x;
       int tileWY = y * tileSize + shape.y;
 
-      if (AABB(pWX, pWY, playerSize, playerSize, tileWX, tileWY, shape.width, shape.height)) {
+      if (AABB(pWX, pWY, playerSize, playerSize, tileWX, tileWY, shape.width,
+               shape.height)) {
         switch (shape.collisionType) {
-          case 2: //Spike
-            dead = true;
-            return;
-          case 3: case 5: case 7: case 9: case 11: case 12: //Orbs
-            curOrbI = mapIndex;
-            if (lastOrbI != curOrbI) {
-              switch (shape.collisionType) {
-                case 3: canJumpOrb[0] = true; break;
-                case 5: canJumpOrb[1] = true; break;
-                case 7: canJumpOrb[2] = true; break;
-                case 9: canJumpOrb[3] = true; break;
-                case 11: canJumpOrb[4] = true; break;
-                case 12: canJumpOrb[5] = true; break;
-              }
-            } 
-            continue;
-          case 4: //Yellow Pad
-            curOrbI = mapIndex;
-            if (lastOrbI != curOrbI) {
-              playerY = (float)(tileWY - playerSize) - levelY;
-
-              pWY = (int)playerY - playerSize;
-
-              yVelocity = jumpVel * 1.36;
-              
-              lastOrbI = curOrbI;
-              jumpPad = true;
+        case 2: // Spike
+          dead = true;
+          return;
+        case 3:
+        case 5:
+        case 7:
+        case 9:
+        case 11:
+        case 12: // Orbs
+          curOrbI = mapIndex;
+          if (lastOrbI != curOrbI) {
+            switch (shape.collisionType) {
+            case 3:
+              canJumpOrb[0] = true;
+              break;
+            case 5:
+              canJumpOrb[1] = true;
+              break;
+            case 7:
+              canJumpOrb[2] = true;
+              break;
+            case 9:
+              canJumpOrb[3] = true;
+              break;
+            case 11:
+              canJumpOrb[4] = true;
+              break;
+            case 12:
+              canJumpOrb[5] = true;
+              break;
             }
-            continue;
-          case 6: //Pink Pad
-            curOrbI = mapIndex;
-            if (lastOrbI != curOrbI) {
-              playerY = (float)(tileWY - playerSize) - levelY;
-
-              pWY = (int)playerY - playerSize;
-
-              yVelocity = jumpVel * 0.88;
-              
-              lastOrbI = curOrbI;
-              jumpPad = true;
-            }
-            continue;
-          case 8: //Red Pad
-            curOrbI = mapIndex;
-            if (lastOrbI != curOrbI) {
-              playerY = (float)(tileWY - playerSize) - levelY;
-
-              pWY = (int)playerY - playerSize;
-
-              yVelocity = jumpVel * 1.69;
-              
-              lastOrbI = curOrbI;
-              jumpPad = true;
-            }
-            continue;
-          case 10: //Blue Pad
-            curOrbI = mapIndex;
-            if (lastOrbI != curOrbI) {
-              rGrav = !rGrav;
-              
-              if (!rGrav) {
-                playerY = (float)(tileWY + shape.height) - levelY;
-                yVelocity = -jumpVel * 0.5;
-              } else {
-                playerY = (float)(tileWY - playerSize) - levelY;
-                yVelocity = -jumpVel * 0.5;
-              }
-              
-              pWY = (int)playerY + (int)levelY;
-              lastOrbI = curOrbI;
-              jumpPad = true;
-            }
-            continue;
-          case 13:
-            if (rGrav != false) {
-              rGrav = false;
-              yVelocity = -yVelocity;
-            }
-            continue;
-          case 14:
-            if (rGrav != true) {
-              rGrav = true;
-              yVelocity = -yVelocity;
-            }
-            continue;
           }
+          continue;
+        case 4: // Yellow Pad
+          curOrbI = mapIndex;
+          if (lastOrbI != curOrbI) {
+            playerY = (float)(tileWY - playerSize) - levelY;
+
+            pWY = (int)playerY - playerSize;
+
+            yVelocity = jumpVel * 1.36;
+
+            lastOrbI = curOrbI;
+            jumpPad = true;
+          }
+          continue;
+        case 6: // Pink Pad
+          curOrbI = mapIndex;
+          if (lastOrbI != curOrbI) {
+            playerY = (float)(tileWY - playerSize) - levelY;
+
+            pWY = (int)playerY - playerSize;
+
+            yVelocity = jumpVel * 0.88;
+
+            lastOrbI = curOrbI;
+            jumpPad = true;
+          }
+          continue;
+        case 8: // Red Pad
+          curOrbI = mapIndex;
+          if (lastOrbI != curOrbI) {
+            playerY = (float)(tileWY - playerSize) - levelY;
+
+            pWY = (int)playerY - playerSize;
+
+            yVelocity = jumpVel * 1.69;
+
+            lastOrbI = curOrbI;
+            jumpPad = true;
+          }
+          continue;
+        case 10: // Blue Pad
+          curOrbI = mapIndex;
+          if (lastOrbI != curOrbI) {
+            rGrav = !rGrav;
+
+            if (!rGrav) {
+              playerY = (float)(tileWY + shape.height) - levelY;
+              yVelocity = -jumpVel * 0.5;
+            } else {
+              playerY = (float)(tileWY - playerSize) - levelY;
+              yVelocity = -jumpVel * 0.5;
+            }
+
+            pWY = (int)playerY + (int)levelY;
+            lastOrbI = curOrbI;
+            jumpPad = true;
+          }
+          continue;
+        case 13:
+          if (rGrav != false) {
+            rGrav = false;
+            yVelocity = -yVelocity;
+          }
+          continue;
+        case 14:
+          if (rGrav != true) {
+            rGrav = true;
+            yVelocity = -yVelocity;
+          }
+          continue;
+        }
 
         if (shape.collisionType == 1) {
-          if (rGrav) {
-            //Reversed gravity
-            if (yVelocity >= 0.0f && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
-              playerY = (float)(tileWY + playerSize) - levelY;
-              yVelocity = 0.0f;
-              isGrounded = true;
-              pWY = tileWY + shape.height;
-            } else if (yVelocity < 0.0f && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
-              playerY = (float)(tileWY - playerSize) - levelY;
-              yVelocity = 0.2f;
-              pWY = tileWY - playerSize;
-            } else {
-              if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
-                dead = true;
-                return;
-              }
-            }
-          } else {
-            //Normal gravity
-            if (yVelocity >= 0.0f && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
-              playerY = (float)(tileWY - playerSize) - levelY;
-              yVelocity = 0.0f;
-              isGrounded = true;
-              pWY = tileWY - playerSize;
-            } else if (yVelocity <= 0.0f && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
-              playerY = (float)(tileWY + shape.height) - levelY;
-              yVelocity = 0.2f;
-              pWY = tileWY + shape.height;
-            } else {
-              if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
-                dead = true;
-                return;
-              }
-            }
-          }
+          wallCollide(shape, pWY, oldPWX, oldPWY, tileWX, tileWY);
         }
       }
     }
@@ -530,14 +620,16 @@ void collide() {
   int worldGround = (levels[levelId].header.h * tileSize) - (int)levelY;
   if ((int)playerY + playerSize > worldGround) {
     playerY = (float)(worldGround - playerSize);
-    if (jumpPad == false) yVelocity = 0.0f;
+    if (jumpPad == false)
+      yVelocity = 0.0f;
     isGrounded = true;
   }
 }
 
 bool checkJumpOrb() {
-  if (hasJumped) return true;
-  
+  if (hasJumped)
+    return true;
+
   if (canJumpOrb[0]) {
     yVelocity = jumpVel;
     lastOrbI = curOrbI;
@@ -575,7 +667,7 @@ bool checkJumpOrb() {
   return true;
 }
 
-void loop() {
+void loop(float dt) {
   if (keyDown(KEY_PRGM_MENU)) {
     GetKey(&key);
   }
@@ -586,8 +678,9 @@ void loop() {
 
   if (!isPaused) {
     Bdisp_AllClr_VRAM();
-    
-    levelX += scrollSpeed;
+
+    dt *= gameSpeed;
+    levelX += scrollSpeed * dt;
 
     if ((int)levelX >= (levels[levelId].header.w * tileSize) - LCD_WIDTH_PX) {
       reset();
@@ -599,38 +692,54 @@ void loop() {
         hasJumped = true;
       }
     }
-    if (!keyDown(KEY_PRGM_UP) && !keyDown(KEY_PRGM_SHIFT)) hasJumped = false;
+    if (!keyDown(KEY_PRGM_UP) && !keyDown(KEY_PRGM_SHIFT))
+      hasJumped = false;
 
-    yVelocity += gravity;
-    if (rGrav) playerY -= yVelocity;
-    else playerY += yVelocity;
+    const int dir = rGrav ? -1 : 1;
+    const float dy = dir * (yVelocity * dt + 0.5 * gravity * dt * dt);
+    playerY += dy;
+
+    yVelocity += gravity * dt;
+    if (yVelocity > terminalVel) {
+      yVelocity = terminalVel;
+    }
+
+    // if (rGrav) playerY -= yVelocity;
+    // else playerY += yVelocity;
 
     isGrounded = false;
-    for (int i = 0; i < 6; i++) canJumpOrb[i] = false;
+    for (int i = 0; i < 6; i++)
+      canJumpOrb[i] = false;
     collide();
 
     float oLevelY = levelY;
-    
+
     if (playerY > 130.0f) {
       levelY += (playerY - 130.0f);
-      if (levelY > maxLevelY) levelY = maxLevelY;
+      if (levelY > maxLevelY)
+        levelY = maxLevelY;
     } else if (playerY < 66.0f) {
       levelY += (playerY - 66.0f);
-      if (levelY < -240.0f) levelY = -240.0f;
+      if (levelY < -240.0f)
+        levelY = -240.0f;
     }
 
     float cameraDeltaY = levelY - oLevelY;
     playerY -= cameraDeltaY;
 
     if (isGrounded == false && pIsGrounded == false) {
-      if (rGrav) targetRot -= 18;
-      else targetRot += 18;
+      if (rGrav)
+        targetRot -= 18.0f;
+      else
+        targetRot += 18.0f;
     } else {
       const float r = rGrav ? 9.0f : 54.0f;
       targetRot = (float)(((int)(playerRot + r) / 90) * 90);
     }
-    if (targetRot >= 360.0f) targetRot = 0.0f;
-    if (targetRot < 0.0f) targetRot = 360.0f;
+    if (targetRot >= 360.0f)
+      targetRot = 0.0f;
+    if (targetRot < 0.0f)
+      targetRot = 360.0f;
 
     int diff = (((int)(targetRot - playerRot) + 540) % 360) - 180;
 
@@ -639,11 +748,14 @@ void loop() {
     } else {
       playerRot += sign(diff) * 18;
     }
-    if (playerRot >= 360.0f) playerRot = 0.0f;
-    if (playerRot < 0.0f) playerRot = 0.0f;
+    if (playerRot >= 360.0f)
+      playerRot = 0.0f;
+    if (playerRot < 0.0f)
+      playerRot = 0.0f;
 
-    //Out of bounds check
-    if (levelY < -230.0f) dead = true;
+    // Out of bounds check
+    if (levelY < -230.0f)
+      dead = true;
 
     if (dead) {
       reset();
@@ -651,14 +763,18 @@ void loop() {
     }
 
     pIsGrounded = isGrounded;
+    oPlayerX = playerX + levelX;
+    oPlayerY = playerY + levelY;
   }
 
   if (!onMenu) {
     Bdisp_Fill_VRAM((color_t)0x4c3c, 3);
     int vGroundY = (levels[levelId].header.h * tileSize) - (int)levelY;
-    if (vGroundY < LCD_HEIGHT_PX) fillArea(0, vGroundY, LCD_WIDTH_PX, 1, (color_t)0x0000);
+    if (vGroundY < LCD_HEIGHT_PX)
+      fillArea(0, vGroundY, LCD_WIDTH_PX, 1, (color_t)0x0000);
     drawMap((int)levelX, (int)levelY);
-    drawRotatedSprite(icon, playerX + 12, playerY + 12, playerSize, playerRot, (color_t*)icon_palette);
+    drawRotatedSprite(icon, playerX + 12, playerY + 12, playerSize, playerRot,
+                      (color_t *)icon_palette);
   }
 
   if (isPaused) {
@@ -667,8 +783,10 @@ void loop() {
     } else {
       pauseMenu();
     }
-    if (skipInterrupt) skipInterrupt = false;
-    else GetKey(&key);
+    if (skipInterrupt)
+      skipInterrupt = false;
+    else
+      GetKey(&key);
   }
 
   if (keyDown(KEY_PRGM_EXIT) && !onMenu && !isPaused && !skipInterrupt) {
@@ -683,11 +801,11 @@ void loop() {
 }
 
 int main() {
-  //Clear VRAM
+  // Clear VRAM
   Bdisp_AllClr_VRAM();
-  //Enable colours
+  // Enable colours
   Bdisp_EnableColor(1);
-  //Stop top bar from appearing when keys are pressed
+  // Stop top bar from appearing when keys are pressed
   EnableDisplayHeader(0, 0);
   EnableStatusArea(3);
 
@@ -703,16 +821,16 @@ int main() {
   int startTime = RTC_GetTicks();
 
   while (1) {
-    loop();
-
-    //Print fps
     int currentTime = RTC_GetTicks();
-    int elapsed = currentTime - startTime;
+    float dt = (currentTime - startTime) / 128.0f;
 
+    loop(dt);
+
+    // Print fps
     int x = 0, y = 0;
     char fpsStr[10];
     char printStr[10] = "FPS: ";
-    itoa((int)(128.0f / (float)elapsed), (unsigned char*)fpsStr);
+    itoa((int)(dt * 128.0f), (unsigned char *)fpsStr);
     cStrcat(printStr, fpsStr);
     PrintMiniMini(&x, &y, printStr, 0b00000010, TEXT_COLOR_BLACK, 0);
     Bdisp_PutDisp_DD();

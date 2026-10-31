@@ -1,17 +1,15 @@
 const playerSprite = new Image();
 playerSprite.src = 'Sprites/GDIcon x24.png';
 
-const gravity = 1.98 * 1.5;//5;
-//const gravity = 94.040816 / tileSize * 20;
-let scrollSpeed = 5.8 * 1.5;//12.4632;
-//let scrollSpeed = 10.386 / tileSize * 20;
+const gravity = 94.04 * tileSize;
+let scrollSpeed = 10.386 * tileSize;
 let ground = tileSize * 19;
 
 let playerY = tileSize * 19;
-
 let yVelocity = 0;
-const jumpVel = -12.8 * 1.5;//-22.5;
-//const jumpVel = -20.375510;
+// const jumpVel = -20.375510 * tileSize;
+const jumpVel = -19.8 * tileSize;
+const terminalVel = 26.28 * tileSize;
 
 const playerSize = 24;
 
@@ -19,6 +17,7 @@ let rGrav = false;
 
 let isGrounded = false;
 let pIsGrounded = false;
+//Yellow, Pink, Red, Blue, Green, Black
 let canJumpOrb = [false, false, false, false, false, false];
 let hasJumped = false;
 
@@ -28,6 +27,7 @@ let lastOrbI = -1;
 let dead = false;
 
 let targetFPS = 20;
+const referenceFps = 20;
 let lastFrameTime = performance.now();
 
 let playerRot = 0;
@@ -36,16 +36,16 @@ let targetRot = 0;
 let ox = levelX;
 let oy = playerY;
 
-const substeps = 1;
+let gameSpeed = 0.8;
 
 //10.386 tiles/s
 //94.04 units/s/s
 //20.37 units/s
 //Jump distance: 3.6 tiles
 //Jump duration: 0.45s
-
-let jumpStartTime, jumpDuration;
-let jumpDistance;
+//
+//Red hitboxes act as if playerSize is 25
+//Blue hitboxes act as if playerSize is 7.5
 
 function AABB(ax, ay, aw, ah, bx, by, bw, bh) {
     return (
@@ -56,12 +56,59 @@ function AABB(ax, ay, aw, ah, bx, by, bw, bh) {
     );
 }
 
+function wallCollide(shape, pWY, oldPWX, oldPWY, tileWX, tileWY) {
+    const hitboxSize = playerSize * 0.3;
+    const hitboxOffset = (playerSize - hitboxSize) / 2;
+
+    const hitboxX = oldPWX + hitboxOffset;
+    const hitboxY = oldPWY + hitboxOffset;
+
+    if (rGrav) {
+        // if (yVelocity >= 0 && (hitboxY + hitboxSize / 4) >= (tileWY + shape.height)) {
+        if (yVelocity >= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
+            playerY = tileWY + playerSize;
+            yVelocity = 0;
+            isGrounded = true;
+        } else if (yVelocity < 0 && (hitboxY + (hitboxSize - hitboxSize / 4)) <= tileWY) {
+            playerY = tileWY - playerSize;
+            yVelocity = 0.2;
+        } else {
+            const overlapsX = hitboxX + hitboxSize > tileWX && hitboxX < tileWX + shape.width;
+            const overlapsY = hitboxY + hitboxSize > tileWY && hitboxY < tileWY + shape.height;
+
+            if (overlapsX && overlapsY) {
+                dead = true;
+                return;
+            }
+        }
+    } else {
+        // if (yVelocity >= 0 && (hitboxY + (hitboxSize - hitboxSize / 4)) <= tileWY) { 
+        if (yVelocity >= 0 && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
+            playerY = tileWY - playerSize;
+            yVelocity = 0;
+            isGrounded = true;
+            console.log("block collide");
+        } else if (yVelocity <= 0 && (hitboxY + hitboxSize / 4) >= (tileWY + shape.height)) {
+            playerY = tileWY + shape.height;
+            yVelocity = 0.2;
+        } else {
+            const overlapsX = hitboxX + hitboxSize > tileWX && hitboxX < tileWX + shape.width;
+            const overlapsY = hitboxY + hitboxSize > tileWY && hitboxY < tileWY + shape.height;
+
+            if (overlapsX && overlapsY) {
+                dead = true;
+                return;
+            }
+        }
+    }
+}
+
 function collide() {
     let pWX = Math.floor(playerX + levelX);
     let pWY = Math.floor(playerY);
 
-    let oldPWX = playerX + ox;//pWX - Math.floor(scrollSpeed);
-    let oldPWY = oy;//rGrav ? Math.floor(pWY + yVelocity) : Math.floor(pWY - yVelocity);
+    let oldPWX = playerX + ox;
+    let oldPWY = oy;
 
     let startCol = Math.floor(levelX / tileSize);
     if (startCol < 0) startCol = 0;
@@ -109,7 +156,7 @@ function collide() {
 
                             pWY = playerY - playerSize;
 
-                            yVelocity = jumpVel * 1.36;
+                            yVelocity = jumpVel * 1.47;
 
                             lastOrbI = curOrbI;
                             jumpPad = true;
@@ -122,7 +169,7 @@ function collide() {
 
                             pWY = playerY - playerSize;
 
-                            yVelocity = jumpVel * 0.88;
+                            yVelocity = jumpVel * 0.63;
 
                             lastOrbI = curOrbI;
                             jumpPad = true;
@@ -135,7 +182,7 @@ function collide() {
 
                             pWY = playerY - playerSize;
 
-                            yVelocity = jumpVel * 1.69;
+                            yVelocity = jumpVel * 2.3;
 
                             lastOrbI = curOrbI;
                             jumpPad = true;
@@ -174,41 +221,7 @@ function collide() {
                 }
 
                 if (shape.collisionType == 1) {
-                    if (rGrav) {
-                        //Reversed gravity
-                        if (yVelocity >= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
-                            playerY = tileWY + playerSize;
-                            yVelocity = 0.0;
-                            isGrounded = true;
-                            pWY = tileWY + shape.height;
-                        } else if (yVelocity < 0 && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
-                            playerY = tileWY - playerSize;
-                            yVelocity = 0.2;
-                            pWY = tileWY - playerSize;
-                        } else {
-                            if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
-                                dead = true;
-                                return;
-                            }
-                        }
-                    } else {
-                        //Normal gravity
-                        if (yVelocity >= 0 && (oldPWY + (playerSize - playerSize / 4)) <= tileWY) {
-                            playerY = tileWY - playerSize;
-                            yVelocity = 0;
-                            isGrounded = true;
-                            pWY = tileWY - playerSize;
-                        } else if (yVelocity <= 0 && (oldPWY + playerSize / 4) >= (tileWY + shape.height)) {
-                            playerY = tileWY + shape.height;
-                            yVelocity = 0.2;
-                            pWY = tileWY + shape.height;
-                        } else {
-                            if (oldPWX + playerSize <= tileWX || oldPWX >= tileWX + shape.width) {
-                                dead = true;
-                                return;
-                            }
-                        }
-                    }
+                   wallCollide(shape, pWY, oldPWX, oldPWY, tileWX, tileWY); 
                 }
             }
         }
@@ -232,12 +245,12 @@ function checkJumpOrb() {
         hasJumped = true;
         return false;
     } else if (canJumpOrb[1]) {
-        yVelocity = jumpVel * 0.8;
+        yVelocity = jumpVel * 0.72;
         lastOrbI = curOrbI;
         hasJumped = true;
         return false;
     } else if (canJumpOrb[2]) {
-        yVelocity = jumpVel * 1.3;
+        yVelocity = jumpVel * 1.28;
         lastOrbI = curOrbI;
         hasJumped = true;
         return false;
@@ -263,13 +276,12 @@ function checkJumpOrb() {
     return true;
 }
 
-function updatePlayer() {
-    const currentTime = performance.now();
-    const elapsedTime = currentTime - lastFrameTime;
-    if (elapsedTime < 1000 / targetFPS) {
-        return;
-    }
-    lastFrameTime = currentTime - (elapsedTime % (1000 / targetFPS));
+function updatePlayer() { 
+    const now = performance.now();
+    let dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+    lastFrameTime = now;
+
+    dt *= gameSpeed;
 
     let spacePressed = false;
     for (let i = 0; i < pressedKeys.length; i++) {
@@ -280,68 +292,61 @@ function updatePlayer() {
     }
     if (!spacePressed) hasJumped = false;
 
+    physUpdate(spacePressed, dt); 
 
-    for (let i = 0; i < substeps; i++) {
-        physUpdate(spacePressed);
-    }
-
+    //Rotation
     if (isGrounded == false && pIsGrounded == false) {
-        if (rGrav) targetRot -= 18;
-        else targetRot += 18;
+        if (rGrav) targetRot -= 18 * dt * 20;
+        else targetRot += 18 * dt * 20;
     } else {
         let r = rGrav ? 9 : 54;
         targetRot = Math.floor((playerRot + r) / 90) * 90;
     }
     targetRot = targetRot % 360;
 
-    let diff = ((targetRot - playerRot + 540) % 360) - 180;
+    let diff = ((targetRot - playerRot + 540) % 360) - 180; 
 
     if (Math.abs(diff) <= 18) {
         playerRot = targetRot;
     } else {
-        playerRot += Math.sign(diff) * 18;
+        playerRot += Math.sign(diff) * 18 * dt * 20;
     }
 
+    //Trail
     oldPlayerPos.push({x: levelX + playerX, y: playerY + (playerSize / 2)});
     
-    if (playerY < -100) dead = true;
+    //Kill Player if off top of screen
+    if (playerY < -100) dead = true; 
 
+    console.log("Grounded: " + isGrounded, "pGrounded: " + pIsGrounded);
     pIsGrounded = isGrounded;
-    
 }
 
-function physUpdate(spacePressed) {
-    levelX += scrollSpeed / substeps;
+function physUpdate(spacePressed, dt) {
+    ox = levelX;
+    oy = playerY;
+
+    levelX += scrollSpeed * dt;
 
     if (spacePressed && checkJumpOrb() && isGrounded) {
         yVelocity = jumpVel;
         hasJumped = true;
-        if (!jumpStartTime) jumpStartTime = performance.now(); //For testing
     }
+ 
+    const dir = rGrav ? -1 : 1; 
+    const dy = dir * (yVelocity * dt + 0.5 * gravity * dt * dt);
 
-    yVelocity += gravity / substeps;
-    if (rGrav) playerY -= yVelocity / substeps;
-    else playerY += yVelocity / substeps;
+    playerY += dy;
+    yVelocity += gravity * dt;
+
+    yVelocity = Math.min(yVelocity, terminalVel);
 
     isGrounded = false;
     for (let i = 0; i < canJumpOrb.length; i++) canJumpOrb[i] = false;
-    collide();
-
-    //For testing
-    if (isGrounded && jumpStartTime && !jumpDuration) {
-        jumpDuration = performance.now() - jumpStartTime;
-        jumpDistance = scrollSpeed * targetFPS * (jumpDuration / 1000) / tileSize;
-        console.log(jumpDuration, jumpDistance);
-        jumpStartTime = null;
-        jumpDuration = null;
-        jumpDistance = null;
-    }  
+    collide(); 
 
     if (dead) {
         stopTesting();
         return;
-    }
-
-    ox = levelX;
-    oy = playerY;
+    } 
 }

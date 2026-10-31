@@ -202,3 +202,28 @@ canvas {
 .popup.fading {
    opacity: 0;
 }
+
+#videoCont {
+    position: absolute;
+    overflow: hidden;
+    width: 800px;
+    height: 200px;
+    margin: 0;
+    left: 17px;
+    top: 375px; 
+
+    opacity: 0.4;
+
+    user-select: none;
+    display: none;
+}
+
+#referenceVideo {
+    position: absolute;
+    z-index: 1000;
+    border: 1px dashed red;
+    top: -130px;
+    left: -220px;
+    margin: 0;
+    transform: scale(0.6);
+}

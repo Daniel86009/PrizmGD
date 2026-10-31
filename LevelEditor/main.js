@@ -6,6 +6,8 @@ const stopButton = document.getElementById('stopButton');
 
 const levelNameText = document.getElementById("levelNameText");
 
+const refVideo = document.getElementById('referenceVideo'); //For testing
+
 let level = [];
 let mouse = {x: 0, y: 0, down: false, tileId: 1, tool: 'paint'};
 let selection = {x: null, y: null, w: 0, h: 0, tiles: [], undo: []};
@@ -355,11 +357,18 @@ function testLevel() {
     isTesting = true;
     oldPlayerPos = [];
     document.getElementById('pausePlayImg').src = 'Sprites/Stop.svg';
+
+    refVideo.currentTime = 2.1;
+    refVideo.play();
+    hasAutoJumped = false;
+    testNum = 0;
 }
 
 function stopTesting() {
     isTesting = false;
     document.getElementById('pausePlayImg').src = 'Sprites/Play.svg';
+
+    refVideo.pause();
 }
 
 function playButton() {
@@ -798,3 +807,19 @@ function changeView(type) {
 
 start();
 window.requestAnimationFrame(update);
+
+//Testing video
+const vidCont = document.getElementById('videoCont');
+let vidContX = 0; let vidContY = 0;
+vidCont.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", null);
+    const rect = vidCont.getBoundingClientRect();
+    vidContX = e.clientX - rect.left;
+    vidContY = e.clientY - rect.top; 
+});
+
+vidCont.addEventListener("dragend", (e) => {
+    vidCont.style.left = `${e.clientX - vidContX}px`;
+    vidCont.style.top = `${e.clientY - vidContY}px`;
+    console.log("left: " + (e.clientX - vidContX), "top: " + (e.clientY - vidContY));
+})
